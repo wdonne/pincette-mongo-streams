@@ -1,0 +1,87 @@
+package net.pincette.mongo.streams;
+
+import static net.pincette.json.JsonUtil.createArrayBuilder;
+import static net.pincette.json.JsonUtil.createObjectBuilder;
+import static net.pincette.json.JsonUtil.createValue;
+import static net.pincette.json.JsonUtil.isArray;
+import static net.pincette.json.JsonUtil.isObject;
+import static net.pincette.mongo.Expression.function;
+import static net.pincette.util.Collections.map;
+import static net.pincette.util.Pair.pair;
+
+import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import javax.json.JsonArray;
+import javax.json.JsonArrayBuilder;
+import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
+import javax.json.JsonValue;
+import org.apache.kafka.streams.kstream.KStream;
+
+/**
+ * The <code>$redact</code> operator.
+ *
+ * @author Werner Donn\u00e9
+ */
+class Redact {
+  private static final JsonValue DESCEND = createValue("DESCEND");
+  private static final String DESCEND_VAR = "$$DESCEND";
+  private static final JsonValue KEEP = createValue("KEEP");
+  private static final String KEEP_VAR = "$$KEEP";
+  private static final JsonValue PRUNE = createValue("PRUNE");
+  private static final String PRUNE_VAR = "$$PRUNE";
+
+  private Redact() {}
+
+  static KStream<String, JsonObject> stage(
+      final KStream<String, JsonObject> stream, final JsonValue expression) {
+    final Function<JsonObject, JsonValue> function =
+        function(
+            expression,
+            map(pair(DESCEND_VAR, DESCEND), pair(KEEP_VAR, KEEP), pair(PRUNE_VAR, PRUNE)));
+
+    return stream.mapValues(v -> transform(v, function).orElse(null)).filter((k, v) -> v != null);
+  }
+
+  private static Optional<JsonObject> transform(
+      final JsonObject json, final Function<JsonObject, JsonValue> function) {
+    return Optional.of(function.apply(json))
+        .filter(result -> DESCEND.equals(result) || KEEP.equals(result))
+        .map(result -> KEEP.equals(result) ? json : transformEmbedded(json, function));
+  }
+
+  private static JsonValue transformArray(
+      final JsonArray array, final Function<JsonObject, JsonValue> function) {
+    return array.stream()
+        .map(v -> isObject(v) ? transform(v.asJsonObject(), function).orElse(null) : v)
+        .filter(Objects::nonNull)
+        .reduce(createArrayBuilder(), JsonArrayBuilder::add, (b1, b2) -> b1)
+        .build();
+  }
+
+  private static JsonObject transformEmbedded(
+      final JsonObject json, final Function<JsonObject, JsonValue> function) {
+    final BiFunction<JsonObjectBuilder, Entry<String, JsonValue>, JsonObjectBuilder> tryArray =
+        (b, e) ->
+            b.add(
+                e.getKey(),
+                isArray(e.getValue())
+                    ? transformArray(e.getValue().asJsonArray(), function)
+                    : e.getValue());
+
+    return json.entrySet().stream()
+        .reduce(
+            createObjectBuilder(),
+            (b, e) ->
+                isObject(e.getValue())
+                    ? transform(e.getValue().asJsonObject(), function)
+                        .map(j -> b.add(e.getKey(), j))
+                        .orElse(b)
+                    : tryArray.apply(b, e),
+            (b1, b2) -> b1)
+        .build();
+  }
+}
