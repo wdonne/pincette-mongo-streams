@@ -20,7 +20,7 @@ class Unset {
   private Unset() {}
 
   static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression) {
+      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
     assert isArray(expression) || isString(expression);
 
     return Project.stage(
@@ -32,6 +32,7 @@ class Unset {
                 .map(JsonString::getString)
                 .reduce(createObjectBuilder(), (b, f) -> b.add(f, 0), (b1, b2) -> b1)
                 .build()
-            : createObjectBuilder().add(asString(expression).getString(), 0).build());
+            : createObjectBuilder().add(asString(expression).getString(), 0).build(),
+        context);
   }
 }

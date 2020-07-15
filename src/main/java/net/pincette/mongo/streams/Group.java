@@ -58,6 +58,7 @@ import javax.json.JsonNumber;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.json.JsonUtil;
+import net.pincette.mongo.Features;
 import net.pincette.util.Pair;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStream;
@@ -105,8 +106,8 @@ class Group {
 
   private Group() {}
 
-  private static Operator addToSet(final JsonValue expression) {
-    final Function<JsonObject, JsonValue> function = expression(expression);
+  private static Operator addToSet(final JsonValue expression, final Features features) {
+    final Function<JsonObject, JsonValue> function = expression(expression, features);
 
     return (current, json) ->
         Optional.of(function.apply(json))
@@ -141,8 +142,10 @@ class Group {
   }
 
   private static BiFunction<JsonValue, JsonObject, JsonObject> aggregator(
-      final JsonObject expression, final MongoCollection<Document> collection) {
-    final Map<String, Operator> operators = operatorsPerField(expression);
+      final JsonObject expression,
+      final MongoCollection<Document> collection,
+      final Features features) {
+    final Map<String, Operator> operators = operatorsPerField(expression, features);
     final Map<String, Selector> selectors = selectorsPerField(expression);
 
     return (key, json) ->
@@ -163,8 +166,8 @@ class Group {
             .join();
   }
 
-  private static Operator avg(final JsonValue expression) {
-    return numbers(expression, Group::avg);
+  private static Operator avg(final JsonValue expression, final Features features) {
+    return numbers(expression, Group::avg, features);
   }
 
   private static JsonValue avg(final JsonObject current, final double value) {
@@ -186,15 +189,18 @@ class Group {
     return new String(toHex(digester.digest(string(expression).getBytes(UTF_8))));
   }
 
-  private static Function<JsonObject, JsonValue> expression(final JsonValue expression) {
+  private static Function<JsonObject, JsonValue> expression(
+      final JsonValue expression, final Features features) {
     return isExpressionObject(expression)
-        ? expressionObject(expression.asJsonObject())
-        : function(expression);
+        ? expressionObject(expression.asJsonObject(), features)
+        : function(expression, features);
   }
 
-  private static Function<JsonObject, JsonValue> expressionObject(final JsonObject expression) {
+  private static Function<JsonObject, JsonValue> expressionObject(
+      final JsonObject expression, final Features features) {
     final Map<String, Function<JsonObject, JsonValue>> nested =
-        expression.entrySet().stream().collect(toMap(Entry::getKey, e -> expression(e.getValue())));
+        expression.entrySet().stream()
+            .collect(toMap(Entry::getKey, e -> expression(e.getValue(), features)));
 
     return json ->
         nested.entrySet().stream()
@@ -234,12 +240,12 @@ class Group {
         || isNumber(value);
   }
 
-  private static Operator max(final JsonValue expression) {
-    return minMax(expression, (current, value) -> compare(value, current) > 0);
+  private static Operator max(final JsonValue expression, final Features features) {
+    return minMax(expression, (current, value) -> compare(value, current) > 0, features);
   }
 
-  private static Operator mergeObjects(final JsonValue expression) {
-    final Function<JsonObject, JsonValue> function = expression(expression);
+  private static Operator mergeObjects(final JsonValue expression, final Features features) {
+    final Function<JsonObject, JsonValue> function = expression(expression, features);
 
     return (current, json) ->
         copy(
@@ -253,13 +259,15 @@ class Group {
             .build();
   }
 
-  private static Operator min(final JsonValue expression) {
-    return minMax(expression, (current, value) -> compare(value, current) < 0);
+  private static Operator min(final JsonValue expression, final Features features) {
+    return minMax(expression, (current, value) -> compare(value, current) < 0, features);
   }
 
   private static Operator minMax(
-      final JsonValue expression, final BiPredicate<JsonValue, JsonValue> predicate) {
-    final Function<JsonObject, JsonValue> function = expression(expression);
+      final JsonValue expression,
+      final BiPredicate<JsonValue, JsonValue> predicate,
+      final Features features) {
+    final Function<JsonObject, JsonValue> function = expression(expression, features);
 
     return (current, json) ->
         Optional.of(function.apply(json))
@@ -268,8 +276,10 @@ class Group {
   }
 
   private static Operator numbers(
-      final JsonValue expression, final BiFunction<JsonObject, Double, JsonValue> op) {
-    final Function<JsonObject, JsonValue> function = expression(expression);
+      final JsonValue expression,
+      final BiFunction<JsonObject, Double, JsonValue> op,
+      final Features features) {
+    final Function<JsonObject, JsonValue> function = expression(expression, features);
 
     return (current, json) ->
         Optional.of(function.apply(json))
@@ -295,17 +305,18 @@ class Group {
         .map(e -> pair(e.getKey(), e.getValue().asJsonObject()));
   }
 
-  private static Map<String, Operator> operatorsPerField(final JsonObject expression) {
+  private static Map<String, Operator> operatorsPerField(
+      final JsonObject expression, final Features features) {
     return functionsPerField(
         expression,
         (op, expr) ->
             ofNullable(aggregators.get(op))
-                .map(aggregator -> aggregator.apply(expr.get(op)))
+                .map(aggregator -> aggregator.apply(expr.get(op), features))
                 .orElse(null));
   }
 
-  private static Operator push(final JsonValue expression) {
-    final Function<JsonObject, JsonValue> function = expression(expression);
+  private static Operator push(final JsonValue expression, final Features features) {
+    final Function<JsonObject, JsonValue> function = expression(expression, features);
 
     return (current, json) ->
         Optional.of(function.apply(json))
@@ -352,10 +363,10 @@ class Group {
         ofNullable(expr.getString(COLLECTION, null))
             .orElseGet(() -> context.app + "-" + digest(expression));
     final BiFunction<JsonValue, JsonObject, JsonObject> aggregator =
-        aggregator(expr, context.database.getCollection(collection));
+        aggregator(expr, context.database.getCollection(collection), context.features);
     final JsonValue groupExpression = expr.getValue("/" + ID);
     final Function<JsonObject, JsonValue> key =
-        isLiteral(groupExpression) ? (json -> ALL) : expression(groupExpression);
+        isLiteral(groupExpression) ? (json -> ALL) : expression(groupExpression, context.features);
 
     if (context.trace) {
       logger.log(INFO, "$group collection {0}", collection);
@@ -368,8 +379,8 @@ class Group {
         .map((k, v) -> new KeyValue<>(generateKey(k), v));
   }
 
-  private static Operator stdDevPop(final JsonValue expression) {
-    return numbers(expression, Group::stdDevPop);
+  private static Operator stdDevPop(final JsonValue expression, final Features features) {
+    return numbers(expression, Group::stdDevPop, features);
   }
 
   private static JsonValue stdDevPop(final JsonObject current, final double value) {
@@ -390,8 +401,8 @@ class Group {
     return value.asJsonObject().get(N);
   }
 
-  private static Operator sum(final JsonValue expression) {
-    final Function<JsonObject, JsonValue> function = expression(expression);
+  private static Operator sum(final JsonValue expression, final Features features) {
+    final Function<JsonObject, JsonValue> function = expression(expression, features);
 
     return (current, json) ->
         Optional.of(function.apply(json))
@@ -405,7 +416,7 @@ class Group {
             .orElse(current);
   }
 
-  interface Implementation extends Function<JsonValue, Operator> {}
+  interface Implementation extends BiFunction<JsonValue, Features, Operator> {}
 
   interface Operator extends BiFunction<JsonValue, JsonObject, JsonValue> {}
 

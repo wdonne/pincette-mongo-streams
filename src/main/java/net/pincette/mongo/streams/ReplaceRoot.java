@@ -1,7 +1,6 @@
 package net.pincette.mongo.streams;
 
 import static java.util.Optional.ofNullable;
-import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.mongo.Expression.function;
 
 import java.util.Optional;
@@ -23,8 +22,8 @@ class ReplaceRoot {
   private ReplaceRoot() {}
 
   static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression) {
-    final Function<JsonObject, JsonValue> function = function(expression);
+      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+    final Function<JsonObject, JsonValue> function = function(expression, context.features);
 
     return stream.map(
         (k, v) ->

@@ -23,9 +23,9 @@ class Trace {
   private Trace() {}
 
   static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression) {
+      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
     final Function<JsonObject, JsonValue> function =
-        !expression.equals(NULL) ? function(expression) : null;
+        !expression.equals(NULL) ? function(expression, context.features) : null;
     final Logger logger = getLogger(LOGGER);
 
     return stream.mapValues(

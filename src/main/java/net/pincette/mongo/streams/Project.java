@@ -30,6 +30,7 @@ import javax.json.JsonValue;
 import net.pincette.json.JsonUtil;
 import net.pincette.json.Transform.JsonEntry;
 import net.pincette.json.Transform.Transformer;
+import net.pincette.mongo.Features;
 import org.apache.kafka.streams.kstream.KStream;
 
 /**
@@ -117,7 +118,7 @@ class Project {
   }
 
   static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression) {
+      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
     assert isObject(expression);
 
     final JsonObject expr = expression.asJsonObject();
@@ -129,7 +130,7 @@ class Project {
         union(findFields(expr, Project::exclude), expr.containsKey(ID) ? set(ID) : emptySet());
     final Set<String> include = findFields(expr, Project::include);
     final Map<String, Function<JsonObject, JsonValue>> updates =
-        updates(expr, findFields(expr, Project::update));
+        updates(expr, findFields(expr, Project::update), context.features);
 
     assert exclude.isEmpty()
         || (exclude.size() == 1 && exclude.contains(ID))
@@ -143,7 +144,7 @@ class Project {
   }
 
   private static Map<String, Function<JsonObject, JsonValue>> updates(
-      final JsonObject expression, final Set<String> update) {
+      final JsonObject expression, final Set<String> update, final Features features) {
     return update.stream()
         .map(Project::removeExpression)
         .collect(
@@ -153,6 +154,7 @@ class Project {
                     function(
                         ofNullable(expression.get(u))
                             .orElseGet(() -> expression.getValue(toJsonPointer(u))),
-                        map(pair(REMOVE_VAR, REMOVE)))));
+                        map(pair(REMOVE_VAR, REMOVE)),
+                        features)));
   }
 }

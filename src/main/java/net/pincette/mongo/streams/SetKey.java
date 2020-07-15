@@ -18,8 +18,8 @@ class SetKey {
   private SetKey() {}
 
   static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression) {
-    final Function<JsonObject, JsonValue> key = function(expression);
+      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+    final Function<JsonObject, JsonValue> key = function(expression, context.features);
 
     return stream.map((k, v) -> new KeyValue<>(generateKey(key.apply(v)), v));
   }

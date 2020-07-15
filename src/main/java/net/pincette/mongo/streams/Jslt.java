@@ -23,10 +23,15 @@ class Jslt {
   private Jslt() {}
 
   static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression) {
+      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
     assert isString(expression);
 
-    final UnaryOperator<JsonObject> transformer = tryTransformer(asString(expression).getString());
+    final UnaryOperator<JsonObject> transformer =
+        tryTransformer(
+            asString(expression).getString(),
+            null,
+            null,
+            context.features != null ? context.features.jsltResolver : null);
 
     return stream.map(
         (k, v) ->

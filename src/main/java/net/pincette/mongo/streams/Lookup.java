@@ -23,6 +23,7 @@ import javax.json.JsonArrayBuilder;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonValue;
+import net.pincette.mongo.Features;
 import org.apache.kafka.streams.kstream.KStream;
 
 /**
@@ -90,7 +91,8 @@ class Lookup {
     final String from = expr.getString(FROM);
     final boolean inner = expr.getBoolean(INNER, false);
     final JsonArray query = query(expr);
-    final Map<String, Function<JsonObject, JsonValue>> variables = variables(expr);
+    final Map<String, Function<JsonObject, JsonValue>> variables =
+        variables(expr, context.features);
 
     return stream
         .mapValues(
@@ -111,13 +113,18 @@ class Lookup {
   }
 
   private static Map<String, Function<JsonObject, JsonValue>> variables(
-      final JsonObject expression) {
+      final JsonObject expression, final Features features) {
     return ofNullable(expression.getString(LOCAL_FIELD, null))
-        .map(field -> map(pair("$$" + LOCAL_FIELD, wrapArray(function(createValue("$" + field))))))
+        .map(
+            field ->
+                map(
+                    pair(
+                        "$$" + LOCAL_FIELD,
+                        wrapArray(function(createValue("$" + field), features)))))
         .orElseGet(
             () ->
                 expression.getJsonObject(LET).entrySet().stream()
-                    .collect(toMap(e -> "$$" + e.getKey(), e -> function(e.getValue()))));
+                    .collect(toMap(e -> "$$" + e.getKey(), e -> function(e.getValue(), features))));
   }
 
   private static Function<JsonObject, JsonValue> wrapArray(

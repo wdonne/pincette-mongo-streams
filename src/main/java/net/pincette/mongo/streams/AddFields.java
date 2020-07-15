@@ -77,13 +77,13 @@ class AddFields {
   }
 
   static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression) {
+      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
     assert isObject(expression);
 
     final Map<String, Map<String, Function<JsonObject, JsonValue>>> grouped =
         grouped(
             expression.asJsonObject().entrySet().stream()
-                .collect(toMap(Entry::getKey, e -> function(e.getValue()))));
+                .collect(toMap(Entry::getKey, e -> function(e.getValue(), context.features))));
 
     return stream.mapValues(v -> addFields("", v, v, grouped).build());
   }

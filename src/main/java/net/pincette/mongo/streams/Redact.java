@@ -37,11 +37,12 @@ class Redact {
   private Redact() {}
 
   static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression) {
+      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
     final Function<JsonObject, JsonValue> function =
         function(
             expression,
-            map(pair(DESCEND_VAR, DESCEND), pair(KEEP_VAR, KEEP), pair(PRUNE_VAR, PRUNE)));
+            map(pair(DESCEND_VAR, DESCEND), pair(KEEP_VAR, KEEP), pair(PRUNE_VAR, PRUNE)),
+            context.features);
 
     return stream.mapValues(v -> transform(v, function).orElse(null)).filter((k, v) -> v != null);
   }

@@ -17,6 +17,7 @@ import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.function.SideEffect;
 import net.pincette.json.JsonUtil;
+import net.pincette.mongo.Features;
 import org.apache.kafka.streams.kstream.KStream;
 
 /**
@@ -153,25 +154,25 @@ public class Pipeline {
   private static final Logger logger = getLogger("net.pincette.mongo.streams");
   private static final Map<String, Stage> stages =
       map(
-          pair(ADD_FIELDS, (st, ex, ctx) -> AddFields.stage(st, ex)),
+          pair(ADD_FIELDS, AddFields::stage),
           pair(BUCKET, Bucket::stage),
           pair(COUNT, Count::stage),
           pair(DELETE, Delete::stage),
           pair(GROUP, Group::stage),
-          pair(JSLT, (st, ex, ctx) -> Jslt.stage(st, ex)),
+          pair(JSLT, Jslt::stage),
           pair(LOOKUP, Lookup::stage),
-          pair(MATCH, (st, ex, ctx) -> Match.stage(st, ex)),
+          pair(MATCH, Match::stage),
           pair(MERGE, Merge::stage),
           pair(OUT, Out::stage),
           pair(PROBE, (st, ex, ctx) -> Probe.stage(st, ex)),
-          pair(PROJECT, (st, ex, ctx) -> Project.stage(st, ex)),
-          pair(REDACT, (st, ex, ctx) -> Redact.stage(st, ex)),
-          pair(REPLACE_ROOT, (st, ex, ctx) -> ReplaceRoot.stage(st, ex)),
-          pair(REPLACE_WITH, (st, ex, ctx) -> ReplaceRoot.stage(st, ex)),
-          pair(SET, (st, ex, ctx) -> AddFields.stage(st, ex)),
-          pair(SET_KEY, (st, ex, ctx) -> SetKey.stage(st, ex)),
-          pair(TRACE, (st, ex, ctx) -> Trace.stage(st, ex)),
-          pair(UNSET, (st, ex, ctx) -> Unset.stage(st, ex)),
+          pair(PROJECT, Project::stage),
+          pair(REDACT, Redact::stage),
+          pair(REPLACE_ROOT, ReplaceRoot::stage),
+          pair(REPLACE_WITH, ReplaceRoot::stage),
+          pair(SET, AddFields::stage),
+          pair(SET_KEY, SetKey::stage),
+          pair(TRACE, Trace::stage),
+          pair(UNSET, Unset::stage),
           pair(UNWIND, (st, ex, ctx) -> Unwind.stage(st, ex)));
 
   private Pipeline() {}
@@ -214,7 +215,32 @@ public class Pipeline {
       final JsonArray pipeline,
       final MongoDatabase database,
       final boolean trace) {
-    final Context context = new Context(app, database, trace);
+    return create(app, stream, pipeline, database, trace, null);
+  }
+
+  /**
+   * Appends an aggregation <code>pipeline</code> to a given <code>stream</code>, resulting in a new
+   * stream. Pipeline stages that are not recognised are ignored.
+   *
+   * @param app the application.
+   * @param stream the given Kafka stream.
+   * @param pipeline the aggregation pipeline.
+   * @param database the MongoDB database.
+   * @param trace writes tracing of the stages to the logger "net.pincette.mongo.streams" at log
+   *     level <code>INFO</code>.
+   * @param features extra features for the underlying MongoDB aggregation expression language. It
+   *     may be <code>null</code>.
+   * @return The new Kafka stream.
+   * @since 1.0.1
+   */
+  public static KStream<String, JsonObject> create(
+      final String app,
+      final KStream<String, JsonObject> stream,
+      final JsonArray pipeline,
+      final MongoDatabase database,
+      final boolean trace,
+      final Features features) {
+    final Context context = new Context(app, database, trace, features);
 
     return pipeline.stream()
         .filter(JsonUtil::isObject)

@@ -17,10 +17,10 @@ class Match {
   private Match() {}
 
   static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression) {
+      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
     assert isObject(expression);
 
-    final Predicate<JsonObject> predicate = predicate(expression.asJsonObject());
+    final Predicate<JsonObject> predicate = predicate(expression.asJsonObject(), context.features);
 
     return stream.filter((k, v) -> predicate.test(v));
   }
