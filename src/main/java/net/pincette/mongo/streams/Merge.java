@@ -9,13 +9,13 @@ import static net.pincette.json.JsonUtil.emptyObject;
 import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.json.JsonUtil.string;
 import static net.pincette.mongo.JsonClient.findOne;
-import static net.pincette.mongo.JsonClient.insert;
 import static net.pincette.mongo.JsonClient.update;
 import static net.pincette.mongo.streams.Util.matchFields;
 import static net.pincette.mongo.streams.Util.matchQuery;
 import static net.pincette.util.Util.must;
 
 import com.mongodb.reactivestreams.client.MongoCollection;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import javax.json.JsonObject;
@@ -90,9 +90,13 @@ class Merge {
       case FAIL:
         throw (exception(expression));
       case INSERT:
-        return insert(collection, addId(fromStream))
-            .thenApply(result -> must(result, r -> r))
-            .thenApply(result -> fromStream);
+        return Optional.of(addId(fromStream))
+            .map(
+                json ->
+                    update(collection, json, json.getString(ID)) // May linger from previous $delete
+                        .thenApply(result -> must(result, r -> r))
+                        .thenApply(result -> fromStream))
+            .orElseGet(() -> completedFuture(null));
       default:
         return completedFuture(emptyObject());
     }
