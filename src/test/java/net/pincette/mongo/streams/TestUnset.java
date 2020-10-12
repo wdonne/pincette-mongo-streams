@@ -13,13 +13,13 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class TestUnset extends Base {
+class TestUnset extends Base {
   private static final List<JsonObject> MESSAGES =
       list(o(f(ID, v("0")), f("test1", v(0)), f("test2", o(f("test", v(0))))));
 
   @Test
   @DisplayName("$unset 1")
-  public void unset1() {
+  void unset1() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(a(o(f("$unset", v("test1")))), MESSAGES);
 
@@ -29,7 +29,7 @@ public class TestUnset extends Base {
 
   @Test
   @DisplayName("$unset 2")
-  public void unset2() {
+  void unset2() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(a(o(f("$unset", a(v("test1"), v("test2.test"))))), MESSAGES);
 

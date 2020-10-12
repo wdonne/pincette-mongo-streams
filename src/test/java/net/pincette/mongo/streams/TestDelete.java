@@ -21,7 +21,7 @@ import org.bson.Document;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class TestDelete extends Base {
+class TestDelete extends Base {
   private void delete(final JsonObject message, final JsonValue fields) {
     final MongoCollection<Document> collection =
         resources.database.getCollection("pincette-mongo-streams-test");
@@ -43,13 +43,13 @@ public class TestDelete extends Base {
 
   @Test
   @DisplayName("$delete 1")
-  public void delete1() {
+  void delete1() {
     delete(o(f(ID, v("0"))), v(ID));
   }
 
   @Test
   @DisplayName("$delete 2")
-  public void delete2() {
+  void delete2() {
     delete(o(f(ID, v("0")), f("test", v(0))), a(v(ID), v("test")));
   }
 }

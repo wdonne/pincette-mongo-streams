@@ -13,7 +13,7 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class TestJslt extends Base {
+class TestJslt extends Base {
   private void jslt(final String script) {
     final List<TestRecord<String, JsonObject>> result =
         runTest(a(o(f("$jslt", v(script)))), list(o(f(ID, v("0")), f("test", v(0)))));
@@ -24,13 +24,13 @@ public class TestJslt extends Base {
 
   @Test
   @DisplayName("$jslt 1")
-  public void jslt1() {
+  void jslt1() {
     jslt("resource:/test.jslt");
   }
 
   @Test
   @DisplayName("$jslt 2")
-  public void jslt2() {
+  void jslt2() {
     jslt("{\"test\": 1, *: ." + "}");
   }
 }

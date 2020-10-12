@@ -67,7 +67,11 @@ import org.apache.kafka.streams.kstream.KStream;
  *   <dt><a
  *       href="https://docs.mongodb.com/manual/reference/operator/aggregation/lookup/">$lookup</a>
  *   <dd>The extra optional boolean field <code>inner</code> is available to make this pipeline
- *       stage behave like an inner join instead of an outer left join, which is the default.
+ *       stage behave like an inner join instead of an outer left join, which is the default. When
+ *       the other optional boolean field <code>unwind</code> is set, multiple objects may be
+ *       returned where the <code>as</code> field will have a single value instead of an array. In
+ *       this case the join will always be an inner join. With the unwind feature you can avoid the
+ *       accumulation of large arrays in memory.
  *   <dt><a href="https://docs.mongodb.com/manual/reference/operator/aggregation/match/">$match</a>
  *   <dd>Supports the expressions defined in <code>{@link net.pincette.mongo.Match}.</code>
  *   <dt><a href="https://docs.mongodb.com/manual/reference/operator/aggregation/merge/">$merge</a>

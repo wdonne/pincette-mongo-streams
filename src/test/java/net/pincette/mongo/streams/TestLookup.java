@@ -1,5 +1,7 @@
 package net.pincette.mongo.streams;
 
+import static java.util.Comparator.comparing;
+import static java.util.stream.Collectors.toList;
 import static net.pincette.json.Factory.a;
 import static net.pincette.json.Factory.f;
 import static net.pincette.json.Factory.o;
@@ -25,7 +27,7 @@ import org.bson.Document;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class TestLookup extends Base {
+class TestLookup extends Base {
   private static final String COLLECTION = "pincette-mongo-streams-test";
   private static final String OTHER = "other";
   private static final String TEST = "test";
@@ -100,7 +102,7 @@ public class TestLookup extends Base {
 
   @Test
   @DisplayName("$lookup 1")
-  public void lookup1() {
+  void lookup1() {
     assertEquals(
         o(f(ID, v("0")), f(TEST, v(0)), f(OTHER, a(MESSAGE1))),
         lookup(o(f(ID, v("0")), f(TEST, v(0)))));
@@ -108,7 +110,7 @@ public class TestLookup extends Base {
 
   @Test
   @DisplayName("$lookup 2")
-  public void lookup2() {
+  void lookup2() {
     assertEquals(
         o(f(ID, v("0")), f(TEST, v(1)), f(OTHER, a(MESSAGE2))),
         lookup(o(f(ID, v("0")), f(TEST, v(1)))));
@@ -116,7 +118,7 @@ public class TestLookup extends Base {
 
   @Test
   @DisplayName("$lookup 3")
-  public void lookup3() {
+  void lookup3() {
     assertEquals(
         o(f(ID, v("0")), f(TEST, a(v(0), v(1))), f(OTHER, sort(a(MESSAGE1, MESSAGE2)))),
         lookup(o(f(ID, v("0")), f(TEST, a(v(0), v(1))))));
@@ -124,20 +126,20 @@ public class TestLookup extends Base {
 
   @Test
   @DisplayName("$lookup 4")
-  public void lookup4() {
+  void lookup4() {
     assertEquals(
         o(f(ID, v("0")), f(TEST, v(2)), f(OTHER, a())), lookup(o(f(ID, v("0")), f(TEST, v(2)))));
   }
 
   @Test
   @DisplayName("$lookup 5")
-  public void lookup5() {
+  void lookup5() {
     assertNull(lookup(o(f(ID, v("0")), f(TEST, v(2))), true, 0));
   }
 
   @Test
   @DisplayName("$lookup 6")
-  public void lookup6() {
+  void lookup6() {
     assertEquals(
         o(f(ID, v("0")), f(TEST, v(0)), f(OTHER, a(MESSAGE1))),
         lookup(o(f(ID, v("0")), f(TEST, v(0))), true, 1));
@@ -145,7 +147,7 @@ public class TestLookup extends Base {
 
   @Test
   @DisplayName("$lookup 7")
-  public void lookup7() {
+  void lookup7() {
     assertEquals(
         o(f(ID, v("0")), f(TEST, v(0)), f(OTHER, a(MESSAGE1))),
         lookupPipeline(o(f(ID, v("0")), f(TEST, v(0)))));
@@ -153,7 +155,7 @@ public class TestLookup extends Base {
 
   @Test
   @DisplayName("$lookup 8")
-  public void lookup8() {
+  void lookup8() {
     assertEquals(
         o(f(ID, v("0")), f(TEST, v(1)), f(OTHER, a(MESSAGE2))),
         lookupPipeline(o(f(ID, v("0")), f(TEST, v(1)))));
@@ -161,10 +163,41 @@ public class TestLookup extends Base {
 
   @Test
   @DisplayName("$lookup 9")
-  public void lookup9() {
+  void lookup9() {
     assertEquals(
         o(f(ID, v("0")), f(TEST, v(2)), f(OTHER, a())),
         lookupPipeline(o(f(ID, v("0")), f(TEST, v(2)))));
+  }
+
+  @Test
+  @DisplayName("$lookup 10")
+  void lookup10() {
+    prepare();
+
+    final List<TestRecord<String, JsonObject>> result =
+        runTest(
+            a(
+                o(
+                    f(
+                        "$lookup",
+                        o(
+                            f("from", v(COLLECTION)),
+                            f("let", o(f("var", v("$test")))),
+                            f("pipeline", a(o(f("$match", o(f(TEST, o(f("$gte", v("$$var"))))))))),
+                            f("unwind", v(true)),
+                            f("as", v(OTHER))))),
+                o(f("$project", o(f(OTHER, v(1)))))),
+            list(o(f(TEST, v(0)))));
+
+    assertEquals(2, result.size());
+
+    assertEquals(
+        list(MESSAGE1, MESSAGE2),
+        result.stream()
+            .map(TestRecord::value)
+            .map(v -> v.getJsonObject(OTHER))
+            .sorted(comparing(v -> v.getString(ID)))
+            .collect(toList()));
   }
 
   private void prepare() {

@@ -13,10 +13,10 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class TestCount extends Base {
+class TestCount extends Base {
   @Test
   @DisplayName("$count")
-  public void count() {
+  void count() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(a(o(f("$count", v("test")))), list(o(f(ID, v("0"))), o(f(ID, v("1")))));
 

@@ -16,10 +16,10 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class TestOut extends Base {
+class TestOut extends Base {
   @Test
   @DisplayName("$out")
-  public void out() {
+  void out() {
     final JsonObject message = o(f(ID, v("0")));
     final List<TestRecord<String, JsonObject>> result =
         runTest(a(o(f("$out", v("pincette-mongo-streams-test")))), list(message));

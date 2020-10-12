@@ -13,10 +13,10 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class TestMatch extends Base {
+class TestMatch extends Base {
   @Test
   @DisplayName("$match")
-  public void match() {
+  void match() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(o(f("$match", o(f("test", v(0)))))),

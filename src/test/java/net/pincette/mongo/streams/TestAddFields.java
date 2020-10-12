@@ -13,11 +13,11 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class TestAddFields extends Base {
+class TestAddFields extends Base {
   @Test
   @DisplayName("$addFields")
   @SuppressWarnings("java:S1192")
-  public void addFields() {
+  void addFields() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(o(f("$addFields", o(f("test1", v(1)), f("test2", v(0)), f("test3.test", v(1)))))),

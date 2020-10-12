@@ -21,7 +21,7 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class TestMerge extends Base {
+class TestMerge extends Base {
   private static final String COLLECTION = "pincette-mongo-streams-test";
   private static final JsonObject MESSAGE1 = o(f(ID, v("0")));
   private static final JsonObject MESSAGE2 = o(f(ID, v("0")), f("test", v(0)));
@@ -29,7 +29,7 @@ public class TestMerge extends Base {
 
   @Test
   @DisplayName("$merge 1")
-  public void merge1() {
+  void merge1() {
     drop(COLLECTION);
 
     final List<TestRecord<String, JsonObject>> result =
@@ -56,7 +56,7 @@ public class TestMerge extends Base {
 
   @Test
   @DisplayName("$merge 2")
-  public void merge2() {
+  void merge2() {
     drop(COLLECTION);
 
     final List<TestRecord<String, JsonObject>> result =
@@ -81,7 +81,7 @@ public class TestMerge extends Base {
 
   @Test
   @DisplayName("$merge 3")
-  public void merge3() {
+  void merge3() {
     drop(COLLECTION);
 
     assertThrows(
@@ -101,25 +101,25 @@ public class TestMerge extends Base {
 
   @Test
   @DisplayName("$merge 4")
-  public void merge4() {
+  void merge4() {
     mergeExisting("replace", NEW_MESSAGE);
   }
 
   @Test
   @DisplayName("$merge 5")
-  public void merge5() {
+  void merge5() {
     mergeExisting("keepExisting", MESSAGE2);
   }
 
   @Test
   @DisplayName("$merge 6")
-  public void merge6() {
+  void merge6() {
     mergeExisting("merge", NEW_MESSAGE);
   }
 
   @Test
   @DisplayName("$merge 7")
-  public void merge7() {
+  void merge7() {
     drop(COLLECTION);
 
     update(resources.database.getCollection(COLLECTION), MESSAGE2)

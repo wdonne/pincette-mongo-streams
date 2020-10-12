@@ -13,13 +13,13 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class TestSetKey extends Base {
+class TestSetKey extends Base {
   private static final JsonObject MESSAGE = o(f(ID, v("0")), f("test", v("1")));
   private static final List<JsonObject> MESSAGES = list(MESSAGE);
 
   @Test
   @DisplayName("$setKey")
-  public void count() {
+  void count() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(a(o(f("$setKey", v("$test")))), MESSAGES);
 

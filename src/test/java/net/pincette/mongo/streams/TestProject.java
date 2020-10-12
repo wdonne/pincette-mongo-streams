@@ -13,7 +13,7 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class TestProject extends Base {
+class TestProject extends Base {
   private static final List<JsonObject> MESSAGES =
       list(
           o(
@@ -26,7 +26,7 @@ public class TestProject extends Base {
 
   @Test
   @DisplayName("$project exclude 1")
-  public void exclude1() {
+  void exclude1() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(o(f("$project", o(f("test3", v(0)), f("test4", v(false)), f("test5", v(0)))))),
@@ -38,7 +38,7 @@ public class TestProject extends Base {
 
   @Test
   @DisplayName("$project exclude 2")
-  public void exclude2() {
+  void exclude2() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(
@@ -64,7 +64,7 @@ public class TestProject extends Base {
 
   @Test
   @DisplayName("$project exclude 3")
-  public void exclude3() {
+  void exclude3() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(
@@ -90,7 +90,7 @@ public class TestProject extends Base {
 
   @Test
   @DisplayName("$project include 1")
-  public void include1() {
+  void include1() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(a(o(f("$project", o(f("test1", v(1)), f("test2", v(true)))))), MESSAGES);
 
@@ -100,7 +100,7 @@ public class TestProject extends Base {
 
   @Test
   @DisplayName("$project include 2")
-  public void include2() {
+  void include2() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(a(o(f("$project", o(f("test1", v(1)), f(ID, v(false)))))), MESSAGES);
 
@@ -110,7 +110,7 @@ public class TestProject extends Base {
 
   @Test
   @DisplayName("$project include 3")
-  public void include3() {
+  void include3() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(

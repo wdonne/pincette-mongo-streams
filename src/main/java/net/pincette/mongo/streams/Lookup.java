@@ -11,10 +11,12 @@ import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.Expression.replaceVariables;
 import static net.pincette.mongo.JsonClient.aggregate;
+import static net.pincette.mongo.JsonClient.aggregationPublisher;
+import static net.pincette.rs.Chain.with;
+import static net.pincette.rs.Util.iterate;
 import static net.pincette.util.Collections.map;
 import static net.pincette.util.Pair.pair;
 
-import com.mongodb.reactivestreams.client.MongoDatabase;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.function.Function;
@@ -25,6 +27,7 @@ import javax.json.JsonObjectBuilder;
 import javax.json.JsonValue;
 import net.pincette.mongo.Features;
 import org.apache.kafka.streams.kstream.KStream;
+import org.reactivestreams.Publisher;
 
 /**
  * The <code>$lookup</code> operator.
@@ -43,17 +46,23 @@ class Lookup {
   private static final String LOCAL_FIELD = "localField";
   private static final String OR = "$or";
   private static final String PIPELINE = "pipeline";
+  private static final String UNWIND = "unwind";
 
   private Lookup() {}
 
   private static JsonArrayBuilder lookup(
-      final String collection, final JsonArray query, final MongoDatabase database) {
-    return aggregate(database.getCollection(collection), query)
+      final String collection, final JsonArray query, final Context context) {
+    return aggregate(context.database.getCollection(collection), query)
         .thenApply(
             list ->
                 list.stream().reduce(createArrayBuilder(), JsonArrayBuilder::add, (b1, b2) -> b1))
         .toCompletableFuture()
         .join();
+  }
+
+  private static Publisher<JsonObject> lookupPublisher(
+      final String collection, final JsonArray query, final Context context) {
+    return aggregationPublisher(context.database.getCollection(collection), query);
   }
 
   private static JsonArray query(final JsonObject expression) {
@@ -76,6 +85,15 @@ class Lookup {
         .orElseGet(() -> expression.getJsonArray(PIPELINE));
   }
 
+  private static Function<JsonObject, JsonArray> queryFunction(
+      final JsonObject expression, final Context context) {
+    final JsonArray query = query(expression);
+    final Map<String, Function<JsonObject, JsonValue>> variables =
+        variables(expression, context.features);
+
+    return json -> replaceVariables(query, setVariables(variables, json)).asJsonArray();
+  }
+
   private static Map<String, JsonValue> setVariables(
       final Map<String, Function<JsonObject, JsonValue>> variables, final JsonObject json) {
     return variables.entrySet().stream()
@@ -90,22 +108,22 @@ class Lookup {
     final String as = expr.getString(AS);
     final String from = expr.getString(FROM);
     final boolean inner = expr.getBoolean(INNER, false);
-    final JsonArray query = query(expr);
-    final Map<String, Function<JsonObject, JsonValue>> variables =
-        variables(expr, context.features);
+    final Function<JsonObject, JsonArray> queryFunction = queryFunction(expr, context);
 
-    return stream
-        .mapValues(
+    return expr.getBoolean(UNWIND, false)
+        ? stream.flatMapValues(
             v ->
-                createObjectBuilder(v)
-                    .add(
-                        as,
-                        lookup(
-                            from,
-                            replaceVariables(query, setVariables(variables, v)).asJsonArray(),
-                            context.database))
-                    .build())
-        .filter((k, v) -> !inner || !v.getJsonArray(as).isEmpty());
+                iterate(
+                    with(lookupPublisher(from, queryFunction.apply(v), context))
+                        .map(result -> createObjectBuilder(v).add(as, result).build())
+                        .get()))
+        : stream
+            .mapValues(
+                v ->
+                    createObjectBuilder(v)
+                        .add(as, lookup(from, queryFunction.apply(v), context))
+                        .build())
+            .filter((k, v) -> !inner || !v.getJsonArray(as).isEmpty());
   }
 
   private static JsonValue toArray(final JsonValue value) {

@@ -13,7 +13,7 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class TestBucket extends Base {
+class TestBucket extends Base {
   private void bucket(final String collection) {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
@@ -58,13 +58,13 @@ public class TestBucket extends Base {
 
   @Test
   @DisplayName("$bucket 1")
-  public void bucket1() {
+  void bucket1() {
     bucket(null);
   }
 
   @Test
   @DisplayName("$bucket 2")
-  public void bucket2() {
+  void bucket2() {
     bucket("pincette-mongo-streams-test");
   }
 }

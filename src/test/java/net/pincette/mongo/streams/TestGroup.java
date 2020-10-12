@@ -13,10 +13,10 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-public class TestGroup extends Base {
+class TestGroup extends Base {
   @Test
   @DisplayName("$group $addToSet")
-  public void addToSet() {
+  void addToSet() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(o(f("$group", o(f(ID, v(null)), f("items", o(f("$addToSet", v("$test")))))))),
@@ -30,7 +30,7 @@ public class TestGroup extends Base {
 
   @Test
   @DisplayName("$group $avg")
-  public void avg() {
+  void avg() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(o(f("$group", o(f(ID, v(null)), f("avg", o(f("$avg", v("$test")))))))),
@@ -64,19 +64,19 @@ public class TestGroup extends Base {
 
   @Test
   @DisplayName("$group 1")
-  public void group1() {
+  void group1() {
     group(null);
   }
 
   @Test
   @DisplayName("$group 2")
-  public void group2() {
+  void group2() {
     group("pincette-mongo-streams-test");
   }
 
   @Test
   @DisplayName("$group $max")
-  public void max() {
+  void max() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(o(f("$group", o(f(ID, v(null)), f("max", o(f("$max", v("$test")))))))),
@@ -90,7 +90,7 @@ public class TestGroup extends Base {
 
   @Test
   @DisplayName("$group $mergeObjects 1")
-  public void mergeObjects1() {
+  void mergeObjects1() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(o(f("$group", o(f(ID, v(null)), f("merged", o(f("$mergeObjects", v("$test")))))))),
@@ -102,7 +102,7 @@ public class TestGroup extends Base {
 
   @Test
   @DisplayName("$group $mergeObjects 2")
-  public void mergeObjects2() {
+  void mergeObjects2() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(o(f("$group", o(f(ID, v(null)), f("merged", o(f("$mergeObjects", v("$test")))))))),
@@ -123,7 +123,7 @@ public class TestGroup extends Base {
 
   @Test
   @DisplayName("$group $min")
-  public void min() {
+  void min() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(o(f("$group", o(f(ID, v(null)), f("min", o(f("$min", v("$test")))))))),
@@ -137,7 +137,7 @@ public class TestGroup extends Base {
 
   @Test
   @DisplayName("$group $push")
-  public void push() {
+  void push() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(o(f("$group", o(f(ID, v(null)), f("items", o(f("$push", v("$test")))))))),
@@ -152,7 +152,7 @@ public class TestGroup extends Base {
 
   @Test
   @DisplayName("$group $stdDevPop")
-  public void stdDevPop() {
+  void stdDevPop() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(o(f("$group", o(f(ID, v(null)), f("stdDevPop", o(f("$stdDevPop", v("$test")))))))),
@@ -167,7 +167,7 @@ public class TestGroup extends Base {
 
   @Test
   @DisplayName("$group $sum 1")
-  public void sum1() {
+  void sum1() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(o(f("$group", o(f(ID, v("$test")), f("sum", o(f("$sum", v(1)))))))),
@@ -186,7 +186,7 @@ public class TestGroup extends Base {
 
   @Test
   @DisplayName("$group $sum 2")
-  public void sum2() {
+  void sum2() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
             a(o(f("$group", o(f(ID, v("$test")), f("sum", o(f("$sum", v(1.5)))))))),
