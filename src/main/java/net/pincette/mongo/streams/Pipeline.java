@@ -172,7 +172,7 @@ public class Pipeline {
           pair(PROJECT, Project::stage),
           pair(REDACT, Redact::stage),
           pair(REPLACE_ROOT, ReplaceRoot::stage),
-          pair(REPLACE_WITH, ReplaceRoot::stage),
+          pair(REPLACE_WITH, ReplaceWith::stage),
           pair(SET, AddFields::stage),
           pair(SET_KEY, SetKey::stage),
           pair(TRACE, Trace::stage),

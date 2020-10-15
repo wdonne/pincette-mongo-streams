@@ -13,13 +13,13 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class TestReplaceRoot extends Base {
+class TestReplaceWith extends Base {
   @Test
-  @DisplayName("$replaceRoot")
+  @DisplayName("$replaceWith")
   void replaceRoot() {
     final List<TestRecord<String, JsonObject>> result =
         runTest(
-            a(o(f("$replaceRoot", o(f("newRoot", v("$test.test")))))),
+            a(o(f("$replaceWith", v("$test.test")))),
             list(o(f(ID, v("0")), f("test", o(f("test", o(f(ID, v("1")), f("test", v(0)))))))));
 
     assertEquals(1, result.size());
