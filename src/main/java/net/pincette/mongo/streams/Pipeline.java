@@ -71,7 +71,9 @@ import org.apache.kafka.streams.kstream.KStream;
  *       the other optional boolean field <code>unwind</code> is set, multiple objects may be
  *       returned where the <code>as</code> field will have a single value instead of an array. In
  *       this case the join will always be an inner join. With the unwind feature you can avoid the
- *       accumulation of large arrays in memory.
+ *       accumulation of large arrays in memory. When both the extra fields <code>connectionString
+ *       </code> and <code>database</code> are present the query will go to that database instead of
+ *       the default one.
  *   <dt><a href="https://docs.mongodb.com/manual/reference/operator/aggregation/match/">$match</a>
  *   <dd>Supports the expressions defined in <code>{@link net.pincette.mongo.Match}.</code>
  *   <dt><a href="https://docs.mongodb.com/manual/reference/operator/aggregation/merge/">$merge</a>
