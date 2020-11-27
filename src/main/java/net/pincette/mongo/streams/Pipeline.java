@@ -6,6 +6,7 @@ import static java.util.logging.Level.INFO;
 import static java.util.logging.Logger.getLogger;
 import static net.pincette.json.JsonUtil.string;
 import static net.pincette.util.Collections.map;
+import static net.pincette.util.Collections.merge;
 import static net.pincette.util.Pair.pair;
 
 import com.mongodb.reactivestreams.client.MongoDatabase;
@@ -58,6 +59,23 @@ import org.apache.kafka.streams.kstream.KStream;
  *       values after some period. You can then set a <a
  *       href="https://docs.mongodb.com/manual/core/index-ttl/">TTL index</a> to get rid of old
  *       records quickly.
+ *   <dt>$http
+ *   <dd>With this extension operator you can "join" a JSON HTTP API with a data stream or cause
+ *       side effects to it. The object should at least have the fields <code>url</code> and <code>
+ *       method</code>, which are both expressions that should yield a string. The rest of the
+ *       fields are optional. The <code>headers</code> field should be an expression that yields an
+ *       object. Its contents will be added as HTTP headers. Array values will result in
+ *       multi-valued headers. The result of the expression in the <code>body</code> field will be
+ *       used as the request body. The <code>as</code> field, which should be a field name, will
+ *       contain the response body in the message that is forwarded. Without that field response
+ *       bodies are ignored. When the Boolean <code>unwind</code> field is set to <code>true</code>
+ *       and when the response body contains a JSON array, for each entry in the array a message
+ *       will be produced with the array entry in the <code>as</code> field. If the array is empty
+ *       no messages are produced at all. HTTP errors are put in the <code>httpError</code> field,
+ *       which contains the fields <code>statusCode</code> and <code>body</code>. With the object in
+ *       the field <code>sslContext</code> you can add client-side authentication. The <code>
+ *       keyStore</code> field should refer to a PKCS#12 key store file. The <code>
+ *       password</code> field should provide the password for the keys in the key store file.
  *   <dt>$jslt
  *   <dd>This extension operator transforms the incoming message with a <a
  *       href="https://github.com/schibsted/jslt">JSLT</a> script. Its specification should be a
@@ -142,6 +160,7 @@ public class Pipeline {
   private static final String COUNT = "$count";
   private static final String DELETE = "$delete";
   private static final String GROUP = "$group";
+  private static final String HTTP = "$http";
   private static final String JSLT = "$jslt";
   private static final String LOOKUP = "$lookup";
   private static final String MATCH = "$match";
@@ -165,6 +184,7 @@ public class Pipeline {
           pair(COUNT, Count::stage),
           pair(DELETE, Delete::stage),
           pair(GROUP, Group::stage),
+          pair(HTTP, Http::stage),
           pair(JSLT, Jslt::stage),
           pair(LOOKUP, Lookup::stage),
           pair(MATCH, Match::stage),
@@ -246,6 +266,36 @@ public class Pipeline {
       final MongoDatabase database,
       final boolean trace,
       final Features features) {
+    return create(app, stream, pipeline, database, trace, features, null);
+  }
+
+  /**
+   * Appends an aggregation <code>pipeline</code> to a given <code>stream</code>, resulting in a new
+   * stream. Pipeline stages that are not recognised are ignored.
+   *
+   * @param app the application.
+   * @param stream the given Kafka stream.
+   * @param pipeline the aggregation pipeline.
+   * @param database the MongoDB database.
+   * @param trace writes tracing of the stages to the logger "net.pincette.mongo.streams" at log
+   *     level <code>INFO</code>.
+   * @param features extra features for the underlying MongoDB aggregation expression language. It
+   *     may be <code>null</code>.
+   * @param stageExtensions extra stages that will be merged with the built-in stages, which always
+   *     have precedence. It may be <code>null</code>.
+   * @return The new Kafka stream.
+   * @since 1.1
+   */
+  public static KStream<String, JsonObject> create(
+      final String app,
+      final KStream<String, JsonObject> stream,
+      final JsonArray pipeline,
+      final MongoDatabase database,
+      final boolean trace,
+      final Features features,
+      final Map<String, Stage> stageExtensions) {
+    final Map<String, Stage> allStages =
+        stageExtensions != null ? merge(stageExtensions, stages) : stages;
     final Context context = new Context(app, database, trace, features);
 
     return pipeline.stream()
@@ -256,7 +306,7 @@ public class Pipeline {
                 name(json)
                     .flatMap(
                         name ->
-                            ofNullable(stages.get(name))
+                            ofNullable(allStages.get(name))
                                 .map(
                                     stage ->
                                         pair(

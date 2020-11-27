@@ -121,8 +121,9 @@ class Lookup {
     final boolean inner = expr.getBoolean(INNER, false);
     final Context localContext = getDatabase(expr).map(context::withDatabase).orElse(context);
     final Function<JsonObject, JsonArray> queryFunction = queryFunction(expr, context);
+    final boolean unwind = expr.getBoolean(UNWIND, false);
 
-    return expr.getBoolean(UNWIND, false)
+    return unwind
         ? stream.flatMapValues(
             v ->
                 iterate(
