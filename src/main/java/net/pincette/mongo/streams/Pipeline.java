@@ -38,6 +38,14 @@ import org.apache.kafka.streams.kstream.KStream;
  *       operators, so their constraints apply here. The extension field <code>_collection</code> is
  *       also available.
  *   <dt><a href="https://docs.mongodb.com/manual/reference/operator/aggregation/count/">$count</a>
+ *   <dt>$delay
+ *   <dd>With this extension operator you can send a messages to a Kafka topic with a delay. The
+ *       order of the messages is not guaranteed. The operator is an object with two fields. The
+ *       <code>duration</code> field is the number of milliseconds the operation is delayed. The
+ *       <code>topic</code> field is the Kafka topic to which the message is sent after the delay.
+ *       Note that a Kafka producer should be available in the context. Note also that message loss
+ *       is possible if there is a failure in the middle of a delay. The main use-case for this
+ *       operator is retry logic.
  *   <dt>$delete
  *   <dd>This extension operator has a specification with the mandatory fields <code>from</code> and
  *       <code>on</code>. The former is the name of a MongoDB collection. The latter is either a
@@ -158,6 +166,7 @@ public class Pipeline {
   private static final String ADD_FIELDS = "$addFields";
   private static final String BUCKET = "$bucket";
   private static final String COUNT = "$count";
+  private static final String DELAY = "$delay";
   private static final String DELETE = "$delete";
   private static final String GROUP = "$group";
   private static final String HTTP = "$http";
@@ -182,6 +191,7 @@ public class Pipeline {
           pair(ADD_FIELDS, AddFields::stage),
           pair(BUCKET, Bucket::stage),
           pair(COUNT, Count::stage),
+          pair(DELAY, Delay::stage),
           pair(DELETE, Delete::stage),
           pair(GROUP, Group::stage),
           pair(HTTP, Http::stage),
@@ -254,8 +264,8 @@ public class Pipeline {
    * @param database the MongoDB database.
    * @param trace writes tracing of the stages to the logger "net.pincette.mongo.streams" at log
    *     level <code>INFO</code>.
-   * @param features extra features for the underlying MongoDB aggregation expression language. It
-   *     may be <code>null</code>.
+   * @param features extra features for the underlying MongoDB aggregation expression language and
+   *     JSLT. It may be <code>null</code>.
    * @return The new Kafka stream.
    * @since 1.0.1
    */
@@ -279,8 +289,8 @@ public class Pipeline {
    * @param database the MongoDB database.
    * @param trace writes tracing of the stages to the logger "net.pincette.mongo.streams" at log
    *     level <code>INFO</code>.
-   * @param features extra features for the underlying MongoDB aggregation expression language. It
-   *     may be <code>null</code>.
+   * @param features extra features for the underlying MongoDB aggregation expression language and
+   *     JSLT. It may be <code>null</code>.
    * @param stageExtensions extra stages that will be merged with the built-in stages, which always
    *     have precedence. It may be <code>null</code>.
    * @return The new Kafka stream.
@@ -294,9 +304,31 @@ public class Pipeline {
       final boolean trace,
       final Features features,
       final Map<String, Stage> stageExtensions) {
+    return create(
+        stream,
+        pipeline,
+        new Context()
+            .withApp(app)
+            .withDatabase(database)
+            .withTrace(trace)
+            .withFeatures(features)
+            .withStageExtensions(stageExtensions));
+  }
+
+  /**
+   * Appends an aggregation <code>pipeline</code> to a given <code>stream</code>, resulting in a new
+   * stream. Pipeline stages that are not recognised are ignored.
+   *
+   * @param stream the given Kafka stream.
+   * @param pipeline the aggregation pipeline.
+   * @param context the context for the pipeline.
+   * @return The new Kafka stream.
+   * @since 1.2
+   */
+  public static KStream<String, JsonObject> create(
+      final KStream<String, JsonObject> stream, final JsonArray pipeline, final Context context) {
     final Map<String, Stage> allStages =
-        stageExtensions != null ? merge(stageExtensions, stages) : stages;
-    final Context context = new Context(app, database, trace, features);
+        context.stageExtensions != null ? merge(context.stageExtensions, stages) : stages;
 
     return pipeline.stream()
         .filter(JsonUtil::isObject)
@@ -310,7 +342,7 @@ public class Pipeline {
                                 .map(
                                     stage ->
                                         pair(
-                                            trace ? wrapProfile(stage, name) : stage,
+                                            context.trace ? wrapProfile(stage, name) : stage,
                                             json.getValue("/" + name)))))
         .filter(Optional::isPresent)
         .map(Optional::get)

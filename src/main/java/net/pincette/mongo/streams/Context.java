@@ -1,7 +1,10 @@
 package net.pincette.mongo.streams;
 
 import com.mongodb.reactivestreams.client.MongoDatabase;
+import java.util.Map;
+import javax.json.JsonObject;
 import net.pincette.mongo.Features;
+import org.apache.kafka.clients.producer.KafkaProducer;
 
 /**
  * The context for a pipeline stage.
@@ -10,27 +13,67 @@ import net.pincette.mongo.Features;
  * @since 1.1
  */
 public class Context {
+  /** The application. */
   public final String app;
+
+  /** The MongoDB database. */
   public final MongoDatabase database;
+
+  /** Extra features for the underlying MongoDB aggregation expression language and JSLT. */
   public final Features features;
+
+  /** The Kafka producer for stages that need to send messages top topics. */
+  public final KafkaProducer<String, JsonObject> producer;
+
+  /** Extra stages that will be merged with the built-in stages, which always have precedence. */
+  public final Map<String, Stage> stageExtensions;
+
+  /**
+   * Writes tracing of the stages to the logger "net.pincette.mongo.streams" at log level <code>INFO
+   * </code>.
+   */
   public final boolean trace;
 
-  Context(
+  public Context() {
+    this(null, null, null, false, null, null);
+  }
+
+  private Context(
       final String app,
       final MongoDatabase database,
+      final KafkaProducer<String, JsonObject> producer,
       final boolean trace,
-      final Features features) {
+      final Features features,
+      final Map<String, Stage> stageExtensions) {
     this.app = app;
     this.database = database;
+    this.producer = producer;
     this.trace = trace;
     this.features = features;
+    this.stageExtensions = stageExtensions;
   }
 
-  Context withDatabase(final MongoDatabase database) {
-    return new Context(app, database, trace, features);
+  public Context withApp(final String app) {
+    return new Context(app, database, producer, trace, features, stageExtensions);
   }
 
-  Context withFeatures(final Features features) {
-    return new Context(app, database, trace, features);
+  public Context withDatabase(final MongoDatabase database) {
+    return new Context(app, database, producer, trace, features, stageExtensions);
+  }
+
+  public Context withFeatures(final Features features) {
+    return new Context(app, database, producer, trace, features, stageExtensions);
+  }
+
+  public Context withProducer(final KafkaProducer<String, JsonObject> producer) {
+    return new Context(app, database, producer, trace, features, stageExtensions);
+  }
+
+  public Context withStageExtensions(final Map<String, Stage> stageExtensions) {
+    return new Context(app, database, producer, trace, features, stageExtensions);
+  }
+
+  public Context withTrace(final boolean trace) {
+    return new Context(app, database, producer, trace, features, stageExtensions);
   }
 }

@@ -12,5 +12,7 @@ module net.pincette.mongo.streams {
   requires async.http.client;
   requires net.pincette.rs;
   requires org.reactivestreams;
+  requires kafka.clients;
+  requires net.pincette.jes.util;
   exports net.pincette.mongo.streams;
 }
