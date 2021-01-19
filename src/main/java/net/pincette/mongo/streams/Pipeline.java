@@ -137,6 +137,11 @@ import org.apache.kafka.streams.kstream.KStream;
  *   <dt><a
  *       href="https://docs.mongodb.com/manual/reference/operator/aggregation/replaceWith/">$replaceWith</a>
  *   <dd>Supports the expressions defined in <code>{@link net.pincette.mongo.Expression}.</code>
+ *   <dt>$send
+ *   <dd>With this extension operator you can send a message to a Kafka topic. The operator is an object 
+ *       with a <code>topic</code> field, it's the Kafka topic to which the message is sent.
+ *       Note that a Kafka producer should be available in the context. The main use-case for this
+ *       operator is dynamic routing of messages to topics.
  *   <dt><a href="https://docs.mongodb.com/manual/reference/operator/aggregation/set/">$set</a>
  *   <dd>Supports the expressions defined in <code>{@link net.pincette.mongo.Expression}.</code>
  *   <dt>$setKey
@@ -180,6 +185,7 @@ public class Pipeline {
   private static final String REDACT = "$redact";
   private static final String REPLACE_ROOT = "$replaceRoot";
   private static final String REPLACE_WITH = "$replaceWith";
+  private static final String SEND = "$send";
   private static final String SET = "$set";
   private static final String SET_KEY = "$setKey";
   private static final String TRACE = "$trace";
@@ -205,6 +211,7 @@ public class Pipeline {
           pair(REDACT, Redact::stage),
           pair(REPLACE_ROOT, ReplaceRoot::stage),
           pair(REPLACE_WITH, ReplaceWith::stage),
+          pair(SEND, Send::stage),
           pair(SET, AddFields::stage),
           pair(SET_KEY, SetKey::stage),
           pair(TRACE, Trace::stage),
