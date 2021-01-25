@@ -138,8 +138,8 @@ import org.apache.kafka.streams.kstream.KStream;
  *       href="https://docs.mongodb.com/manual/reference/operator/aggregation/replaceWith/">$replaceWith</a>
  *   <dd>Supports the expressions defined in <code>{@link net.pincette.mongo.Expression}.</code>
  *   <dt>$send
- *   <dd>With this extension operator you can send a message to a Kafka topic. The operator is an object 
- *       with a <code>topic</code> field, it's the Kafka topic to which the message is sent.
+ *   <dd>With this extension operator you can send a message to a Kafka topic. The operator is an
+ *       object with a <code>topic</code> field, it's the Kafka topic to which the message is sent.
  *       Note that a Kafka producer should be available in the context. The main use-case for this
  *       operator is dynamic routing of messages to topics.
  *   <dt><a href="https://docs.mongodb.com/manual/reference/operator/aggregation/set/">$set</a>
