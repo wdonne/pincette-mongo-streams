@@ -129,11 +129,17 @@ class Http {
   }
 
   private static Optional<JsonValue> getBody(final Response response) {
-    return "application/json".equals(response.getContentType())
+    return isJson(response)
         ? from(response.getResponseBody()).map(JsonValue.class::cast)
         : Optional.of(response.getContentType())
             .filter(type -> type.startsWith("text/"))
             .map(type -> createValue(response.getResponseBody(UTF_8)));
+  }
+
+  private static boolean isJson(final Response response) {
+    return Optional.ofNullable(response.getContentType())
+        .filter(type -> type.startsWith("application/json"))
+        .isPresent();
   }
 
   private static AsyncHttpClient getClient(final JsonObject sslContext) {
