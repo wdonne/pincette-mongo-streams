@@ -136,12 +136,6 @@ class Http {
             .map(type -> createValue(response.getResponseBody(UTF_8)));
   }
 
-  private static boolean isJson(final Response response) {
-    return Optional.ofNullable(response.getContentType())
-        .filter(type -> type.startsWith("application/json"))
-        .isPresent();
-  }
-
   private static AsyncHttpClient getClient(final JsonObject sslContext) {
     return asyncHttpClient(getConfig(sslContext));
   }
@@ -183,6 +177,12 @@ class Http {
     return stream(createParser(response.getResponseBodyAsStream()))
         .filter(JsonUtil::isObject)
         .map(JsonValue::asJsonObject);
+  }
+
+  private static boolean isJson(final Response response) {
+    return Optional.ofNullable(response.getContentType())
+        .filter(type -> type.startsWith("application/json"))
+        .isPresent();
   }
 
   private static BiFunction<JsonObject, Response, Iterable<JsonObject>> multiple(final String as) {

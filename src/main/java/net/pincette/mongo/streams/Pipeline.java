@@ -105,8 +105,11 @@ import org.apache.kafka.streams.kstream.KStream;
  *   <dt><a href="https://docs.mongodb.com/manual/reference/operator/aggregation/merge/">$merge</a>
  *   <dd>Pipeline values for the <code>whenMatched</code> field are currently not supported. The
  *       <code>into</code> field can only be the name of a collection. The database is always the
- *       one given to the pipeline. The output of the stream is whatever has been updated to or
- *       taken from the MongoDB collection.
+ *       one given to the pipeline. The optional <code>key</code> field accepts an expression, which
+ *       is applied to the incoming message. When it is present it will be used as the value for the
+ *       <code>_id</code> field in the MongoDB collection. The output of the stream is whatever has
+ *       been updated to or taken from the MongoDB collection. The value of the <code>_id</code>
+ *       field of the incoming message will be kept for the output message.
  *   <dt><a href="https://docs.mongodb.com/manual/reference/operator/aggregation/out/">$out</a>
  *   <dd>Because streams are infinite this operator behaves like <code>$merge</code> with the
  *       following settings:

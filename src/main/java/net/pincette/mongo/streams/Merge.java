@@ -5,11 +5,14 @@ import static java.util.UUID.randomUUID;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static net.pincette.json.JsonUtil.copy;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
+import static net.pincette.json.JsonUtil.createValue;
 import static net.pincette.json.JsonUtil.emptyObject;
+import static net.pincette.json.JsonUtil.getValue;
 import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.json.JsonUtil.string;
+import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.JsonClient.findOne;
-import static net.pincette.mongo.JsonClient.update;
+import static net.pincette.mongo.JsonClient.insert;
 import static net.pincette.mongo.streams.Util.matchFields;
 import static net.pincette.mongo.streams.Util.matchQuery;
 import static net.pincette.util.Util.must;
@@ -18,8 +21,10 @@ import com.mongodb.reactivestreams.client.MongoCollection;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Function;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
+import net.pincette.mongo.JsonClient;
 import net.pincette.util.Util.GeneralException;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStream;
@@ -36,6 +41,7 @@ class Merge {
   private static final String INSERT = "insert";
   private static final String INTO = "into";
   private static final String KEEP_EXISTING = "keepExisting";
+  private static final String KEY = "key";
   private static final String MERGE_FIELD = "merge";
   private static final String REPLACE = "replace";
   private static final String WHEN_MATCHED = "whenMatched";
@@ -49,8 +55,28 @@ class Merge {
         : createObjectBuilder(json).add(ID, randomUUID().toString()).build();
   }
 
+  private static JsonObject addId(final JsonObject json, final JsonValue value) {
+    return createObjectBuilder(json).add(ID, value).build();
+  }
+
   private static GeneralException exception(final JsonObject expression) {
     return new GeneralException("$merge " + string(expression) + " failed");
+  }
+
+  private static JsonObject process(
+      final JsonObject fromStream,
+      final JsonValue key,
+      final JsonObject query,
+      final JsonObject expression,
+      final MongoCollection<Document> collection) {
+    return findOne(collection, query)
+        .thenComposeAsync(
+            found ->
+                found
+                    .map(f -> processExisting(fromStream, f, expression, collection))
+                    .orElseGet(() -> processNew(addId(fromStream, key), expression, collection)))
+        .toCompletableFuture()
+        .join();
   }
 
   private static CompletionStage<JsonObject> processExisting(
@@ -64,19 +90,12 @@ class Merge {
       case KEEP_EXISTING:
         return completedFuture(fromCollection);
       case MERGE_FIELD:
-        final JsonObject merged =
-            copy(fromStream, createObjectBuilder(fromCollection))
-                .add(ID, fromCollection.getString(ID))
-                .build();
-        return update(collection, merged, merged.getString(ID))
-            .thenApply(result -> must(result, r -> r))
-            .thenApply(result -> merged);
+        return update(
+            collection,
+            copy(fromStream, createObjectBuilder(fromCollection)).build(),
+            fromCollection);
       case REPLACE:
-        return update(collection, fromStream, fromCollection.getString(ID))
-            .thenApply(result -> must(result, r -> r))
-            .thenApply(
-                result ->
-                    createObjectBuilder(fromStream).add(ID, fromCollection.getString(ID)).build());
+        return update(collection, fromStream, fromCollection);
       default:
         return completedFuture(emptyObject());
     }
@@ -91,11 +110,7 @@ class Merge {
         throw (exception(expression));
       case INSERT:
         return Optional.of(addId(fromStream))
-            .map(
-                json ->
-                    update(collection, json, json.getString(ID)) // May linger from previous $delete
-                        .thenApply(result -> must(result, r -> r))
-                        .thenApply(result -> fromStream))
+            .map(json -> update(collection, json, null))
             .orElseGet(() -> completedFuture(null));
       default:
         return completedFuture(emptyObject());
@@ -110,23 +125,34 @@ class Merge {
     final MongoCollection<Document> collection =
         context.database.getCollection(expr.getString(INTO));
     final Set<String> fields = matchFields(expr, ID);
+    final Function<JsonObject, JsonValue> key =
+        function(
+            getValue(expr, "/" + KEY).orElseGet(() -> createValue("$" + ID)), context.features);
 
     return stream
         .mapValues(
             v ->
                 matchQuery(v, fields)
+                    .map(query -> process(v, key.apply(v), query, expr, collection))
                     .map(
-                        query ->
-                            findOne(collection, query)
-                                .thenComposeAsync(
-                                    found ->
-                                        found
-                                            .map(f -> processExisting(v, f, expr, collection))
-                                            .orElseGet(() -> processNew(v, expr, collection)))
-                                .toCompletableFuture()
-                                .join())
+                        newValue ->
+                            ofNullable(v.get(ID))
+                                .filter(id -> !newValue.isEmpty())
+                                .map(id -> addId(newValue, id))
+                                .orElse(newValue))
                     .orElseThrow(() -> exception(expr)))
         .filter((k, v) -> !v.isEmpty())
         .map((k, v) -> new KeyValue<>(ofNullable(v.get(ID)).map(Util::generateKey).orElse(k), v));
+  }
+
+  private static CompletionStage<JsonObject> update(
+      final MongoCollection<Document> collection,
+      final JsonObject json,
+      final JsonObject existing) {
+    return (existing != null
+            ? JsonClient.update(collection, existing, addId(json, existing.get(ID)))
+            : insert(collection, json))
+        .thenApply(result -> must(result, r -> r))
+        .thenApply(result -> json);
   }
 }

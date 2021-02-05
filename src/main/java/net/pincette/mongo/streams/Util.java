@@ -35,6 +35,16 @@ class Util {
 
   private Util() {}
 
+  private static JsonObject addMatchQueries(final List<Pair<String, JsonValue>> queries) {
+    return createObjectBuilder()
+        .add(
+            AND,
+            queries.stream()
+                .reduce(
+                    createArrayBuilder(), (b, p) -> b.add(eq(p.first, p.second)), (b1, b2) -> b1))
+        .build();
+  }
+
   private static JsonObjectBuilder eq(final String field, final JsonValue value) {
     return createObjectBuilder().add(field, createObjectBuilder().add(EQ, value));
   }
@@ -68,21 +78,18 @@ class Util {
 
   static Optional<JsonObject> matchQuery(final JsonObject json, final Set<String> fields) {
     return fields.size() == 1
-        ? Optional.of(fields.iterator().next())
-            .flatMap(field -> getValue(json, toJsonPointer(field)).map(value -> pair(field, value)))
-            .map(pair -> eq(pair.first, pair.second).build())
-        : Optional.of(getValues(json, fields))
-            .filter(pairs -> pairs.size() == fields.size())
-            .map(
-                pairs ->
-                    createObjectBuilder()
-                        .add(
-                            AND,
-                            pairs.stream()
-                                .reduce(
-                                    createArrayBuilder(),
-                                    (b, p) -> b.add(eq(p.first, p.second)),
-                                    (b1, b2) -> b1))
-                        .build());
+        ? matchQuerySingle(json, fields.iterator().next())
+        : matchQueryMultiple(json, fields);
+  }
+
+  private static Optional<JsonObject> matchQueryMultiple(
+      final JsonObject json, final Set<String> fields) {
+    return Optional.of(getValues(json, fields))
+        .filter(pairs -> pairs.size() == fields.size())
+        .map(Util::addMatchQueries);
+  }
+
+  private static Optional<JsonObject> matchQuerySingle(final JsonObject json, final String field) {
+    return getValue(json, toJsonPointer(field)).map(value -> eq(field, value).build());
   }
 }

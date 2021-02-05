@@ -5,6 +5,8 @@ import static net.pincette.json.Factory.a;
 import static net.pincette.json.Factory.f;
 import static net.pincette.json.Factory.o;
 import static net.pincette.json.Factory.v;
+import static net.pincette.json.JsonUtil.createObjectBuilder;
+import static net.pincette.mongo.BsonUtil.fromJson;
 import static net.pincette.mongo.JsonClient.findOne;
 import static net.pincette.mongo.JsonClient.update;
 import static net.pincette.util.Collections.list;
@@ -24,8 +26,10 @@ import org.junit.jupiter.api.Test;
 class TestMerge extends Base {
   private static final String COLLECTION = "pincette-mongo-streams-test";
   private static final JsonObject MESSAGE1 = o(f(ID, v("0")));
-  private static final JsonObject MESSAGE2 = o(f(ID, v("0")), f("test", v(0)));
-  private static final JsonObject NEW_MESSAGE = o(f(ID, v("0")), f("test", v(1)));
+  private static final JsonObject MESSAGE2 =
+      o(f(ID, v("0")), f("f1", v("0")), f("f2", v("1")), f("test", v(0)));
+  private static final JsonObject NEW_MESSAGE =
+      o(f(ID, v("0")), f("f1", v("0")), f("f2", v("1")), f("test", v(1)));
 
   @Test
   @DisplayName("$merge 1")
@@ -145,7 +149,9 @@ class TestMerge extends Base {
   private void mergeExisting(final String action, final JsonObject expected) {
     drop(COLLECTION);
 
-    update(resources.database.getCollection(COLLECTION), MESSAGE2)
+    update(
+            resources.database.getCollection(COLLECTION),
+            createObjectBuilder(MESSAGE2).add(ID, o(f("f1", v("0")), f("f2", v("1")))).build())
         .thenApply(result -> must(result, r -> r))
         .toCompletableFuture()
         .join();
@@ -156,14 +162,22 @@ class TestMerge extends Base {
                 o(
                     f(
                         "$merge",
-                        o(f("into", v(COLLECTION)), f("on", v(ID)), f("whenMatched", v(action)))))),
+                        o(
+                            f("into", v(COLLECTION)),
+                            f("on", a(v("f1"), v("f2"))),
+                            f("key", o(f("f1", v("$f1")), f("f2", v("$f2")))),
+                            f("whenMatched", v(action)))))),
             list(NEW_MESSAGE));
 
     assertEquals(1, result.size());
     assertEquals(expected, result.get(0).value());
     assertEquals(
         expected,
-        findOne(resources.database.getCollection(COLLECTION), eq(ID, "0"))
+        findOne(
+                resources.database.getCollection(COLLECTION),
+                eq(ID, fromJson(o(f("f1", v("0")), f("f2", v("1"))))))
+            .thenApply(
+                res -> res.map(r -> createObjectBuilder(r).add(ID, NEW_MESSAGE.get(ID)).build()))
             .toCompletableFuture()
             .join()
             .orElseGet(JsonUtil::emptyObject));
