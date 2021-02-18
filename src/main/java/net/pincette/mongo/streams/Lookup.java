@@ -4,6 +4,9 @@ import static com.mongodb.reactivestreams.client.MongoClients.create;
 import static java.util.Optional.ofNullable;
 import static java.util.stream.Collectors.toMap;
 import static net.pincette.json.Factory.a;
+import static net.pincette.json.Factory.f;
+import static net.pincette.json.Factory.o;
+import static net.pincette.json.Factory.v;
 import static net.pincette.json.JsonUtil.createArrayBuilder;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
 import static net.pincette.json.JsonUtil.createValue;
@@ -26,7 +29,6 @@ import java.util.function.Function;
 import javax.json.JsonArray;
 import javax.json.JsonArrayBuilder;
 import javax.json.JsonObject;
-import javax.json.JsonObjectBuilder;
 import javax.json.JsonValue;
 import net.pincette.mongo.Features;
 import org.apache.kafka.streams.kstream.KStream;
@@ -41,7 +43,6 @@ class Lookup {
   private static final String AS = "as";
   private static final String CONNECTION_STRING = "connectionString";
   private static final String DATABASE = "database";
-  private static final String EXISTS = "$exists";
   private static final String FOREIGN_FIELD = "foreignField";
   private static final String FROM = "from";
   private static final String IN = "$in";
@@ -49,7 +50,6 @@ class Lookup {
   private static final String LET = "let";
   private static final String MATCH = "$match";
   private static final String LOCAL_FIELD = "localField";
-  private static final String OR = "$or";
   private static final String PIPELINE = "pipeline";
   private static final String UNWIND = "unwind";
 
@@ -78,21 +78,7 @@ class Lookup {
 
   private static JsonArray query(final JsonObject expression) {
     return ofNullable(expression.getString(FOREIGN_FIELD, null))
-        .map(
-            field ->
-                createArrayBuilder()
-                    .add(
-                        createObjectBuilder()
-                            .add(
-                                MATCH,
-                                wrapOuter(
-                                    expression,
-                                    field,
-                                    createObjectBuilder()
-                                        .add(
-                                            field,
-                                            createObjectBuilder().add(IN, "$$" + LOCAL_FIELD)))))
-                    .build())
+        .map(field -> a(o(f(MATCH, o(f(field, o(f(IN, v("$$" + LOCAL_FIELD)))))))))
         .orElseGet(() -> expression.getJsonArray(PIPELINE));
   }
 
@@ -161,20 +147,5 @@ class Lookup {
   private static Function<JsonObject, JsonValue> wrapArray(
       final Function<JsonObject, JsonValue> function) {
     return json -> toArray(function.apply(json));
-  }
-
-  private static JsonObjectBuilder wrapOuter(
-      final JsonObject expression, final String field, final JsonObjectBuilder query) {
-    return expression.getBoolean(INNER, false)
-        ? query
-        : createObjectBuilder()
-            .add(
-                OR,
-                createArrayBuilder()
-                    .add(query)
-                    .add(createObjectBuilder().add(field, JsonValue.NULL))
-                    .add(
-                        createObjectBuilder()
-                            .add(field, createObjectBuilder().add(EXISTS, false))));
   }
 }

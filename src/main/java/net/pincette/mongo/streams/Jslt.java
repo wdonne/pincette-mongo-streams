@@ -1,7 +1,8 @@
 package net.pincette.mongo.streams;
 
 import static java.util.Optional.ofNullable;
-import static net.pincette.json.Jslt.tryTransformer;
+import static net.pincette.json.Jslt.transformerObject;
+import static net.pincette.json.Jslt.tryReader;
 import static net.pincette.json.JsonUtil.asString;
 import static net.pincette.json.JsonUtil.isString;
 
@@ -26,12 +27,7 @@ class Jslt {
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
     assert isString(expression);
 
-    final UnaryOperator<JsonObject> transformer =
-        tryTransformer(
-            asString(expression).getString(),
-            null,
-            null,
-            context.features != null ? context.features.jsltResolver : null);
+    final UnaryOperator<JsonObject> transformer = transformer(expression, context);
 
     return stream.map(
         (k, v) ->
@@ -40,5 +36,18 @@ class Jslt {
                     result ->
                         new KeyValue<>(ofNullable(result.getString(ID, null)).orElse(k), result))
                 .orElseGet(() -> new KeyValue<>(k, v)));
+  }
+
+  private static UnaryOperator<JsonObject> transformer(
+      final JsonValue expression, final Context context) {
+    final net.pincette.json.Jslt.Context transformerContext =
+        new net.pincette.json.Jslt.Context(tryReader(asString(expression).getString()));
+
+    return transformerObject(
+        context.features != null
+            ? transformerContext
+                .withFunctions(context.features.customJsltFunctions)
+                .withResolver(context.features.jsltResolver)
+            : transformerContext);
   }
 }
