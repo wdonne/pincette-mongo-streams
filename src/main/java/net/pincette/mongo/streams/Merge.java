@@ -1,5 +1,6 @@
 package net.pincette.mongo.streams;
 
+import static java.time.Duration.ofSeconds;
 import static java.util.Optional.ofNullable;
 import static java.util.UUID.randomUUID;
 import static java.util.concurrent.CompletableFuture.completedFuture;
@@ -13,9 +14,12 @@ import static net.pincette.json.JsonUtil.string;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.JsonClient.findOne;
 import static net.pincette.mongo.JsonClient.insert;
+import static net.pincette.mongo.streams.Util.exceptionLogger;
 import static net.pincette.mongo.streams.Util.matchFields;
 import static net.pincette.mongo.streams.Util.matchQuery;
+import static net.pincette.util.ScheduledCompletionStage.composeAsyncAfter;
 import static net.pincette.util.Util.must;
+import static net.pincette.util.Util.rethrow;
 
 import com.mongodb.reactivestreams.client.MongoCollection;
 import java.util.Optional;
@@ -25,7 +29,6 @@ import java.util.function.Function;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.mongo.JsonClient;
-import net.pincette.util.Util.GeneralException;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStream;
 import org.bson.Document;
@@ -59,8 +62,12 @@ class Merge {
     return createObjectBuilder(json).add(ID, value).build();
   }
 
-  private static GeneralException exception(final JsonObject expression) {
-    return new GeneralException("$merge " + string(expression) + " failed");
+  private static FailException exception(final JsonObject expression) {
+    return new FailException("$merge " + string(expression) + " failed");
+  }
+
+  private static String getWhenMatched(final JsonObject expression) {
+    return expression.getString(WHEN_MATCHED, MERGE_FIELD);
   }
 
   private static JsonObject process(
@@ -68,13 +75,30 @@ class Merge {
       final JsonValue key,
       final JsonObject query,
       final JsonObject expression,
-      final MongoCollection<Document> collection) {
+      final MongoCollection<Document> collection,
+      final Context context) {
     return findOne(collection, query)
         .thenComposeAsync(
             found ->
                 found
                     .map(f -> processExisting(fromStream, f, expression, collection))
                     .orElseGet(() -> processNew(addId(fromStream, key), expression, collection)))
+        .exceptionally(
+            t -> {
+              exceptionLogger(t.getCause(), "$merge", context);
+
+              if (t.getCause() instanceof FailException) {
+                rethrow(t.getCause());
+              }
+
+              return composeAsyncAfter(
+                      () ->
+                          completedFuture(
+                              process(fromStream, key, query, expression, collection, context)),
+                      ofSeconds(5))
+                  .toCompletableFuture()
+                  .join();
+            })
         .toCompletableFuture()
         .join();
   }
@@ -84,9 +108,9 @@ class Merge {
       final JsonObject fromCollection,
       final JsonObject expression,
       final MongoCollection<Document> collection) {
-    switch (expression.getString(WHEN_MATCHED, MERGE_FIELD)) {
+    switch (getWhenMatched(expression)) {
       case FAIL:
-        throw (exception(expression));
+        throw exception(expression);
       case KEEP_EXISTING:
         return completedFuture(fromCollection);
       case MERGE_FIELD:
@@ -107,7 +131,7 @@ class Merge {
       final MongoCollection<Document> collection) {
     switch (expression.getString(WHEN_NOT_MATCHED, INSERT)) {
       case FAIL:
-        throw (exception(expression));
+        throw exception(expression);
       case INSERT:
         return Optional.of(addId(fromStream))
             .map(json -> update(collection, json, null))
@@ -133,7 +157,7 @@ class Merge {
         .mapValues(
             v ->
                 matchQuery(v, fields)
-                    .map(query -> process(v, key.apply(v), query, expr, collection))
+                    .map(query -> process(v, key.apply(v), query, expr, collection, context))
                     .map(
                         newValue ->
                             ofNullable(v.get(ID))
@@ -154,5 +178,11 @@ class Merge {
             : insert(collection, json))
         .thenApply(result -> must(result, r -> r))
         .thenApply(result -> json);
+  }
+
+  private static class FailException extends RuntimeException {
+    private FailException(final String message) {
+      super(message);
+    }
   }
 }

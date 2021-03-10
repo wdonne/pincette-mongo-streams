@@ -1,6 +1,8 @@
 package net.pincette.mongo.streams;
 
 import static java.util.Collections.emptySet;
+import static java.util.Optional.ofNullable;
+import static java.util.logging.Level.SEVERE;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static net.pincette.json.JsonUtil.asString;
@@ -47,6 +49,10 @@ class Util {
 
   private static JsonObjectBuilder eq(final String field, final JsonValue value) {
     return createObjectBuilder().add(field, createObjectBuilder().add(EQ, value));
+  }
+
+  static void exceptionLogger(final Throwable t, final String stage, final Context context) {
+    ofNullable(context.logger).ifPresent(l -> l.log(SEVERE, stage, t));
   }
 
   static String generateKey(final JsonValue key) {

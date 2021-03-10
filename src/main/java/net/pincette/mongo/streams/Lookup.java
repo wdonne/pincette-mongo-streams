@@ -1,6 +1,7 @@
 package net.pincette.mongo.streams;
 
 import static com.mongodb.reactivestreams.client.MongoClients.create;
+import static java.time.Duration.ofSeconds;
 import static java.util.Optional.ofNullable;
 import static java.util.stream.Collectors.toMap;
 import static net.pincette.json.Factory.a;
@@ -16,10 +17,13 @@ import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.Expression.replaceVariables;
 import static net.pincette.mongo.JsonClient.aggregate;
 import static net.pincette.mongo.JsonClient.aggregationPublisher;
+import static net.pincette.mongo.streams.Util.exceptionLogger;
 import static net.pincette.rs.Chain.with;
 import static net.pincette.rs.Util.iterate;
+import static net.pincette.rs.Util.retryPublisher;
 import static net.pincette.util.Collections.map;
 import static net.pincette.util.Pair.pair;
+import static net.pincette.util.Util.tryToGetForever;
 
 import com.mongodb.reactivestreams.client.MongoDatabase;
 import java.util.Map;
@@ -63,17 +67,26 @@ class Lookup {
 
   private static JsonArrayBuilder lookup(
       final String collection, final JsonArray query, final Context context) {
-    return aggregate(context.database.getCollection(collection), query)
-        .thenApply(
-            list ->
-                list.stream().reduce(createArrayBuilder(), JsonArrayBuilder::add, (b1, b2) -> b1))
+    return tryToGetForever(
+            () ->
+                aggregate(context.database.getCollection(collection), query)
+                    .thenApply(
+                        list ->
+                            list.stream()
+                                .reduce(
+                                    createArrayBuilder(), JsonArrayBuilder::add, (b1, b2) -> b1)),
+            ofSeconds(5),
+            e -> exceptionLogger(e, "$lookup", context))
         .toCompletableFuture()
         .join();
   }
 
   private static Publisher<JsonObject> lookupPublisher(
       final String collection, final JsonArray query, final Context context) {
-    return aggregationPublisher(context.database.getCollection(collection), query);
+    return retryPublisher(
+        () -> aggregationPublisher(context.database.getCollection(collection), query),
+        ofSeconds(5),
+        e -> exceptionLogger(e, "$lookup", context));
   }
 
   private static JsonArray query(final JsonObject expression) {

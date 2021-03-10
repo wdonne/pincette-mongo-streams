@@ -3,6 +3,7 @@ package net.pincette.mongo.streams;
 import static io.netty.handler.ssl.SslContextBuilder.forClient;
 import static java.lang.String.valueOf;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.time.Duration.ofSeconds;
 import static java.util.Optional.ofNullable;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
 import static net.pincette.json.JsonUtil.createParser;
@@ -15,10 +16,12 @@ import static net.pincette.json.JsonUtil.stringValue;
 import static net.pincette.json.JsonUtil.toNative;
 import static net.pincette.json.filter.Util.stream;
 import static net.pincette.mongo.Expression.function;
+import static net.pincette.mongo.streams.Util.exceptionLogger;
 import static net.pincette.util.Builder.create;
 import static net.pincette.util.Collections.list;
 import static net.pincette.util.StreamUtil.iterable;
 import static net.pincette.util.Util.tryToDoRethrow;
+import static net.pincette.util.Util.tryToGetForever;
 import static net.pincette.util.Util.tryToGetRethrow;
 import static org.asynchttpclient.Dsl.asyncHttpClient;
 
@@ -115,8 +118,14 @@ class Http {
         .orElse(null);
   }
 
-  private static Response execute(final AsyncHttpClient client, final Request request) {
-    return client.executeRequest(request).toCompletableFuture().join();
+  private static Response execute(
+      final AsyncHttpClient client, final Request request, final Context context) {
+    return tryToGetForever(
+            () -> client.executeRequest(request).toCompletableFuture(),
+            ofSeconds(5),
+            e -> exceptionLogger(e, "$http", context))
+        .toCompletableFuture()
+        .join();
   }
 
   private static Function<JsonObject, Response> execute(
@@ -124,8 +133,9 @@ class Http {
       final Function<JsonObject, JsonValue> url,
       final Function<JsonObject, JsonValue> method,
       final Function<JsonObject, JsonValue> headers,
-      final Function<JsonObject, JsonValue> body) {
-    return json -> execute(client, createRequest(json, url, method, headers, body));
+      final Function<JsonObject, JsonValue> body,
+      final Context context) {
+    return json -> execute(client, createRequest(json, url, method, headers, body), context);
   }
 
   private static Optional<JsonValue> getBody(final Response response) {
@@ -232,7 +242,8 @@ class Http {
             function(expr.getValue("/" + URL), context.features),
             function(expr.getValue("/" + METHOD), context.features),
             getValue(expr, "/" + HEADERS).map(h -> function(h, context.features)).orElse(null),
-            getValue(expr, "/" + BODY).map(b -> function(b, context.features)).orElse(null));
+            getValue(expr, "/" + BODY).map(b -> function(b, context.features)).orElse(null),
+            context);
     final ValueMapper<JsonObject, Iterable<JsonObject>> multiple =
         json -> multiple(as).apply(json, execute.apply(json));
     final ValueMapper<JsonObject, JsonObject> single =
