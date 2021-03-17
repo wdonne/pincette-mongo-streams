@@ -152,6 +152,7 @@ class Http {
 
   private static AsyncHttpClientConfig getConfig(final JsonObject sslContext) {
     return create(DefaultAsyncHttpClientConfig.Builder::new)
+        .update(b -> b.setFollowRedirect(true))
         .updateIf(b -> sslContext != null, b -> b.setSslContext(createSslContext(sslContext)))
         .build()
         .build();
