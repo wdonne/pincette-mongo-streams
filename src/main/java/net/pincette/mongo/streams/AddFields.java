@@ -1,19 +1,22 @@
 package net.pincette.mongo.streams;
 
-import static java.util.Optional.ofNullable;
-import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toMap;
-import static net.pincette.json.JsonUtil.createObjectBuilder;
+import static net.pincette.json.JsonUtil.from;
 import static net.pincette.json.JsonUtil.isObject;
+import static net.pincette.json.Transform.transform;
 import static net.pincette.mongo.Expression.function;
+import static net.pincette.util.Collections.expand;
+import static net.pincette.util.Collections.flatten;
+import static net.pincette.util.Collections.merge;
 
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.function.Function;
 import javax.json.JsonObject;
-import javax.json.JsonObjectBuilder;
 import javax.json.JsonValue;
+import net.pincette.json.Transform.JsonEntry;
+import net.pincette.json.Transform.Transformer;
 import org.apache.kafka.streams.kstream.KStream;
 
 /**
@@ -24,67 +27,38 @@ import org.apache.kafka.streams.kstream.KStream;
 class AddFields {
   private AddFields() {}
 
-  private static JsonObjectBuilder addFields(
-      final String path,
-      final JsonObject json,
-      final JsonObject evaluated,
-      final Map<String, Map<String, Function<JsonObject, JsonValue>>> newFields) {
-    final String prefix = !path.equals("") ? (path + ".") : "";
-    final JsonObjectBuilder builder =
-        json.entrySet().stream()
-            .reduce(
-                createObjectBuilder(),
-                (b, e) ->
-                    isObject(e.getValue())
-                        ? b.add(
-                            e.getKey(),
-                            addFields(
-                                prefix + e.getKey(),
-                                e.getValue().asJsonObject(),
-                                evaluated,
-                                newFields))
-                        : b.add(e.getKey(), e.getValue()),
-                (b1, b2) -> b1);
+  private static JsonObject addFields(
+      final JsonObject json, final Map<String, Function<JsonObject, JsonValue>> functions) {
+    final Map<String, JsonValue> newValues = applyFunctions(json, functions);
 
-    return ofNullable(newFields.get(path))
-        .map(
-            fields ->
-                fields.entrySet().stream()
-                    .reduce(
-                        builder,
-                        (b, e) -> b.add(e.getKey(), e.getValue().apply(evaluated)),
-                        (b1, b2) -> b1))
-        .orElse(builder);
+    return addNewFields(
+        transform(
+            json,
+            new Transformer(
+                e -> newValues.containsKey(e.path),
+                e -> Optional.of(new JsonEntry(e.path, newValues.remove(e.path))))),
+        newValues);
   }
 
-  private static Map<String, Map<String, Function<JsonObject, JsonValue>>> grouped(
-      final Map<String, Function<JsonObject, JsonValue>> newFields) {
-    return newFields.entrySet().stream()
-        .collect(
-            groupingBy(
-                e ->
-                    Optional.of(e.getKey().lastIndexOf('.'))
-                        .filter(index -> index != -1)
-                        .map(index -> e.getKey().substring(0, index))
-                        .orElse(""),
-                toMap(
-                    e ->
-                        Optional.of(e.getKey().lastIndexOf('.'))
-                            .filter(index -> index != -1)
-                            .map(index -> e.getKey().substring(index + 1))
-                            .orElseGet(e::getKey),
-                    Entry::getValue)));
+  private static JsonObject addNewFields(
+      final JsonObject json, final Map<String, JsonValue> newValues) {
+    return from(expand(merge(flatten(json, "."), flatten(newValues, ".")), "."));
+  }
+
+  private static Map<String, JsonValue> applyFunctions(
+      final JsonObject json, final Map<String, Function<JsonObject, JsonValue>> functions) {
+    return functions.entrySet().stream()
+        .collect(toMap(Entry::getKey, e -> e.getValue().apply(json)));
   }
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
     assert isObject(expression);
 
-    final Map<String, Map<String, Function<JsonObject, JsonValue>>> grouped =
-        grouped(
-            expression.asJsonObject().entrySet().stream()
-                .collect(toMap(Entry::getKey, e -> function(e.getValue(), context.features))));
+    final Map<String, Function<JsonObject, JsonValue>> functions =
+        expression.asJsonObject().entrySet().stream()
+            .collect(toMap(Entry::getKey, e -> function(e.getValue(), context.features)));
 
-    return stream.mapValues(v -> addFields("", v, v, grouped).build());
+    return stream.mapValues(v -> addFields(v, functions));
   }
 }
