@@ -13,6 +13,7 @@ import static net.pincette.util.Builder.create;
 import static net.pincette.util.StreamUtil.iterable;
 import static net.pincette.util.StreamUtil.rangeExclusive;
 import static net.pincette.util.StreamUtil.zip;
+import static net.pincette.util.Util.must;
 
 import java.util.Map.Entry;
 import java.util.Optional;
@@ -76,7 +77,7 @@ class Unwind {
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression) {
-    assert isObject(expression) || isString(expression);
+    must(isObject(expression) || isString(expression));
 
     final String includeArrayIndex =
         object(expression).map(json -> json.getString(INCLUDE_ARRAY_INDEX, null)).orElse(null);

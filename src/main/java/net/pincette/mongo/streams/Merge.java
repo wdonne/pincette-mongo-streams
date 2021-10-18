@@ -1,6 +1,5 @@
 package net.pincette.mongo.streams;
 
-import static java.time.Duration.ofSeconds;
 import static java.util.Optional.ofNullable;
 import static java.util.UUID.randomUUID;
 import static java.util.concurrent.CompletableFuture.completedFuture;
@@ -14,6 +13,7 @@ import static net.pincette.json.JsonUtil.string;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.JsonClient.findOne;
 import static net.pincette.mongo.JsonClient.insert;
+import static net.pincette.mongo.streams.Util.RETRY;
 import static net.pincette.mongo.streams.Util.exceptionLogger;
 import static net.pincette.mongo.streams.Util.matchFields;
 import static net.pincette.mongo.streams.Util.matchQuery;
@@ -95,7 +95,7 @@ class Merge {
                       () ->
                           completedFuture(
                               process(fromStream, key, query, expression, collection, context)),
-                      ofSeconds(5))
+                      RETRY)
                   .toCompletableFuture()
                   .join();
             })
@@ -143,7 +143,7 @@ class Merge {
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
-    assert isObject(expression);
+    must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
     final MongoCollection<Document> collection =

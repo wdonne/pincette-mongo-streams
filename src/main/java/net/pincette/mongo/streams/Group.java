@@ -56,6 +56,7 @@ import javax.json.JsonArray;
 import javax.json.JsonArrayBuilder;
 import javax.json.JsonNumber;
 import javax.json.JsonObject;
+import javax.json.JsonStructure;
 import javax.json.JsonValue;
 import net.pincette.json.JsonUtil;
 import net.pincette.mongo.Features;
@@ -144,8 +145,8 @@ class Group {
   private static BiFunction<JsonValue, JsonObject, JsonObject> aggregator(
       final JsonObject expression,
       final MongoCollection<Document> collection,
-      final Features features) {
-    final Map<String, Operator> operators = operatorsPerField(expression, features);
+      final Context context) {
+    final Map<String, Operator> operators = operatorsPerField(expression, context.features);
     final Map<String, Selector> selectors = selectorsPerField(expression);
 
     return (key, json) ->
@@ -177,7 +178,7 @@ class Group {
     return createObjectBuilder()
         .add(COUNT, count)
         .add(TOTAL, total)
-        .add(AVG, total / (double) count)
+        .add(AVG, total / count)
         .build();
   }
 
@@ -222,6 +223,10 @@ class Group {
         .filter(Optional::isPresent)
         .map(Optional::get)
         .collect(toMap(p -> p.first, p -> p.second));
+  }
+
+  private static boolean hasId(final JsonStructure json) {
+    return getValue(json, "/" + ID).map(val -> !isArray(val)).orElse(true);
   }
 
   private static boolean isExpressionObject(final JsonValue expression) {
@@ -356,14 +361,14 @@ class Group {
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
-    assert isObject(expression);
+    must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
     final String collection =
         ofNullable(expr.getString(COLLECTION, null))
             .orElseGet(() -> context.app + "-" + digest(expression));
     final BiFunction<JsonValue, JsonObject, JsonObject> aggregator =
-        aggregator(expr, context.database.getCollection(collection), context.features);
+        aggregator(expr, context.database.getCollection(collection), context);
     final JsonValue groupExpression = expr.getValue("/" + ID);
     final Function<JsonObject, JsonValue> key =
         isLiteral(groupExpression) ? (json -> ALL) : expression(groupExpression, context.features);
@@ -375,7 +380,7 @@ class Group {
     return stream
         .map((k, v) -> new KeyValue<>(key.apply(v), v))
         .map((k, v) -> new KeyValue<>(k, aggregator.apply(k, v)))
-        .filter((k, v) -> v != null && getValue(v, "/" + ID).map(val -> !isArray(val)).orElse(true))
+        .filter((k, v) -> v != null && hasId(v))
         .map((k, v) -> new KeyValue<>(generateKey(k), v));
   }
 
@@ -393,7 +398,7 @@ class Group {
         .add(N, n)
         .add(S1, s1)
         .add(S2, s2)
-        .add(SIGMA, sqrt(n * s2 - pow(s1, 2)) / (double) n)
+        .add(SIGMA, sqrt(n * s2 - pow(s1, 2)) / n)
         .build();
   }
 

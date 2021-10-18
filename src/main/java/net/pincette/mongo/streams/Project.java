@@ -19,6 +19,7 @@ import static net.pincette.util.Collections.set;
 import static net.pincette.util.Collections.union;
 import static net.pincette.util.Pair.pair;
 import static net.pincette.util.Util.allPaths;
+import static net.pincette.util.Util.must;
 
 import java.util.Map;
 import java.util.Optional;
@@ -119,12 +120,11 @@ class Project {
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
-    assert isObject(expression);
+    must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
 
-    assert !expr.isEmpty();
-    assert ofNullable(expr.get(ID)).map(Project::exclude).orElse(true);
+    must(!expr.isEmpty() && ofNullable(expr.get(ID)).map(Project::exclude).orElse(true));
 
     final Set<String> exclude =
         union(findFields(expr, Project::exclude), expr.containsKey(ID) ? set(ID) : emptySet());
@@ -132,9 +132,10 @@ class Project {
     final Map<String, Function<JsonObject, JsonValue>> updates =
         updates(expr, findFields(expr, Project::update), context.features);
 
-    assert exclude.isEmpty()
-        || (exclude.size() == 1 && exclude.contains(ID))
-        || (include.isEmpty() && updates.isEmpty());
+    must(
+        exclude.isEmpty()
+            || (exclude.size() == 1 && exclude.contains(ID))
+            || (include.isEmpty() && updates.isEmpty()));
 
     return stream.mapValues(v -> project(v, include, exclude, updates));
   }

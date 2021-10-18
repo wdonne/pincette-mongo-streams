@@ -5,6 +5,7 @@ import static net.pincette.mongo.BsonUtil.fromJson;
 import static net.pincette.mongo.Collection.deleteMany;
 import static net.pincette.mongo.streams.Util.matchFields;
 import static net.pincette.mongo.streams.Util.matchQuery;
+import static net.pincette.mongo.streams.Util.tryForever;
 import static net.pincette.util.Util.must;
 
 import com.mongodb.client.result.DeleteResult;
@@ -27,7 +28,7 @@ class Delete {
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
-    assert isObject(expression);
+    must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
     final MongoCollection<Document> collection =
@@ -42,10 +43,13 @@ class Delete {
                 matchQuery(v, fields)
                     .map(
                         query ->
-                            deleteMany(collection, fromJson(query))
-                                .thenApply(result -> must(result, DeleteResult::wasAcknowledged))
-                                .toCompletableFuture()
-                                .join())
+                            tryForever(
+                                () ->
+                                    deleteMany(collection, fromJson(query))
+                                        .thenApply(
+                                            result -> must(result, DeleteResult::wasAcknowledged)),
+                                "$delete",
+                                context))
                     .map(result -> v)
                     .orElse(null))
         .filter((k, v) -> v != null);

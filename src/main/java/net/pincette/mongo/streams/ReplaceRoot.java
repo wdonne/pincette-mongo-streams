@@ -1,6 +1,7 @@
 package net.pincette.mongo.streams;
 
 import static net.pincette.json.JsonUtil.isObject;
+import static net.pincette.util.Util.must;
 
 import javax.json.JsonObject;
 import javax.json.JsonValue;
@@ -18,7 +19,7 @@ class ReplaceRoot {
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
-    assert isObject(expression) && expression.asJsonObject().containsKey(NEW_ROOT);
+    must(isObject(expression) && expression.asJsonObject().containsKey(NEW_ROOT));
 
     return ReplaceWith.stage(stream, expression.asJsonObject().getValue("/" + NEW_ROOT), context);
   }

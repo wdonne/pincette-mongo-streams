@@ -8,16 +8,18 @@ import static net.pincette.json.JsonUtil.isLong;
 import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.json.JsonUtil.isString;
 import static net.pincette.mongo.Expression.function;
+import static net.pincette.mongo.streams.Util.RETRY;
+import static net.pincette.mongo.streams.Util.exceptionLogger;
 import static net.pincette.util.Pair.pair;
 import static net.pincette.util.ScheduledCompletionStage.composeAsyncAfter;
 import static net.pincette.util.Util.must;
+import static net.pincette.util.Util.tryToGetForever;
 
 import java.util.Optional;
 import java.util.function.Function;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.function.SideEffect;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStream;
@@ -33,15 +35,20 @@ class Delay {
       final JsonObject value,
       final long duration,
       final String topic,
-      final KafkaProducer<String, JsonObject> producer) {
+      final Context context) {
     composeAsyncAfter(
-            () -> send(producer, new ProducerRecord<>(topic, key, value)), ofMillis(duration))
+            () ->
+                tryToGetForever(
+                    () -> send(context.producer, new ProducerRecord<>(topic, key, value)),
+                    RETRY,
+                    e -> exceptionLogger(e, "$delay", context)),
+            ofMillis(duration))
         .thenApply(result -> must(result, r -> r));
   }
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
-    assert isObject(expression);
+    must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
     final Function<JsonObject, JsonValue> duration =
@@ -63,7 +70,7 @@ class Delay {
                                             v,
                                             asLong(pair.first),
                                             asString(pair.second).getString(),
-                                            context.producer))
+                                            context))
                                 .andThenGet(() -> new KeyValue<>(k, null)))
                     .orElseGet(() -> new KeyValue<>(k, v)))
         .filter((k, v) -> v != null);

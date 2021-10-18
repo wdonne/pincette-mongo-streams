@@ -46,6 +46,7 @@ public class Context {
     this(null, null, null, null, false, null, null, null);
   }
 
+  @SuppressWarnings("java:S107") // Private for immutable object.
   private Context(
       final String app,
       final MongoDatabase database,

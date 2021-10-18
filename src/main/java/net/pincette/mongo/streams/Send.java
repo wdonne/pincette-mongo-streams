@@ -4,6 +4,8 @@ import static net.pincette.jes.util.Kafka.send;
 import static net.pincette.json.JsonUtil.asString;
 import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.mongo.Expression.function;
+import static net.pincette.mongo.streams.Util.tryForever;
+import static net.pincette.util.Util.must;
 
 import java.util.Optional;
 import java.util.function.Function;
@@ -14,6 +16,11 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStream;
 
+/**
+ * The $send operator.
+ *
+ * @author Werner Donn\u00e9
+ */
 class Send {
   private static final String TOPIC = "topic";
 
@@ -21,11 +28,11 @@ class Send {
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
-    assert isObject(expression);
+    must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
 
-    assert expr.containsKey(TOPIC);
+    must(expr.containsKey(TOPIC));
 
     final Function<JsonObject, JsonValue> topic =
         function(expr.getValue("/" + TOPIC), context.features);
@@ -37,12 +44,14 @@ class Send {
                     .filter(JsonUtil::isString)
                     .map(
                         t ->
-                            send(
-                                    context.producer,
-                                    new ProducerRecord<>(asString(t).getString(), k, v))
-                                .thenApply(result -> new KeyValue<>(k, (JsonObject) null))
-                                .toCompletableFuture()
-                                .join())
+                            tryForever(
+                                () ->
+                                    send(
+                                            context.producer,
+                                            new ProducerRecord<>(asString(t).getString(), k, v))
+                                        .thenApply(result -> new KeyValue<>(k, (JsonObject) null)),
+                                "$send",
+                                context))
                     .orElseGet(() -> new KeyValue<>(k, v)))
         .filter((k, v) -> v != null);
   }

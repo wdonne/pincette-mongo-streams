@@ -4,6 +4,7 @@ import static net.pincette.json.JsonUtil.asString;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
 import static net.pincette.json.JsonUtil.isArray;
 import static net.pincette.json.JsonUtil.isString;
+import static net.pincette.util.Util.must;
 
 import javax.json.JsonObject;
 import javax.json.JsonString;
@@ -21,7 +22,7 @@ class Unset {
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
-    assert isArray(expression) || isString(expression);
+    must(isArray(expression) || isString(expression));
 
     return Project.stage(
         stream,

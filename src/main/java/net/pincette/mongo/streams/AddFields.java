@@ -8,6 +8,7 @@ import static net.pincette.mongo.Expression.function;
 import static net.pincette.util.Collections.expand;
 import static net.pincette.util.Collections.flatten;
 import static net.pincette.util.Collections.merge;
+import static net.pincette.util.Util.must;
 
 import java.util.Map;
 import java.util.Map.Entry;
@@ -53,7 +54,7 @@ class AddFields {
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
-    assert isObject(expression);
+    must(isObject(expression));
 
     final Map<String, Function<JsonObject, JsonValue>> functions =
         expression.asJsonObject().entrySet().stream()

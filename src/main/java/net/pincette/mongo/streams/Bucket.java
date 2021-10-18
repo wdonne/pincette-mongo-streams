@@ -9,6 +9,7 @@ import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.mongo.Util.compare;
 import static net.pincette.util.Builder.create;
 import static net.pincette.util.StreamUtil.slide;
+import static net.pincette.util.Util.must;
 
 import javax.json.JsonArray;
 import javax.json.JsonArrayBuilder;
@@ -40,6 +41,12 @@ class Bucket {
 
   private Bucket() {}
 
+  private static JsonArrayBuilder branches(final JsonValue expression, final JsonArray boundaries) {
+    return slide(boundaries.stream(), 2)
+        .map(list -> createCase(expression, list.get(0), list.get(1)))
+        .reduce(createArrayBuilder(), JsonArrayBuilder::add, (b1, b2) -> b1);
+  }
+
   private static JsonObjectBuilder createCase(
       final JsonValue expression, final JsonValue lower, final JsonValue upper) {
     return createObjectBuilder()
@@ -64,12 +71,12 @@ class Bucket {
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
-    assert isObject(expression);
+    must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
     final JsonArray boundaries = expr.getJsonArray(BOUNDARIES);
 
-    assert boundaries != null && boundaries.size() >= 2 && ordered(boundaries);
+    must(boundaries != null && boundaries.size() >= 2 && ordered(boundaries));
 
     return Group.stage(
         stream, toGroup(expr, boundaries, getValue(expr, "/" + DEFAULT).orElse(null)), context);
@@ -99,14 +106,7 @@ class Bucket {
         .add(
             SWITCH,
             create(JsonUtil::createObjectBuilder)
-                .update(
-                    b ->
-                        b.add(
-                            BRANCHES,
-                            slide(boundaries.stream(), 2)
-                                .map(list -> createCase(expression, list.get(0), list.get(1)))
-                                .reduce(
-                                    createArrayBuilder(), JsonArrayBuilder::add, (b1, b2) -> b1)))
+                .update(b -> b.add(BRANCHES, branches(expression, boundaries)))
                 .updateIf(b -> defaultBucket != null, b -> b.add(DEFAULT, defaultBucket))
                 .build())
         .build();

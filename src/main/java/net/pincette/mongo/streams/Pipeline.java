@@ -141,10 +141,10 @@ import org.apache.kafka.streams.kstream.KStream;
  *       href="https://docs.mongodb.com/manual/reference/operator/aggregation/replaceWith/">$replaceWith</a>
  *   <dd>Supports the expressions defined in <code>{@link net.pincette.mongo.Expression}.</code>
  *   <dt>$send
- *   <dd>With this extension operator you can send a message to a Kafka topic. The operator is an
- *       object with a <code>topic</code> field, it's the Kafka topic to which the message is sent.
- *       Note that a Kafka producer should be available in the context. The main use-case for this
- *       operator is dynamic routing of messages to topics.
+ *   <dd>With this extension operator you can send a message to a Kafka topic. The operator is an *
+ *       object with a <code>topic</code> field, which is the Kafka topic to which the message is *
+ *       sent. Note that a Kafka producer should be available in the context. The main use-case for
+ *       * this operator is dynamic routing of messages to topics.
  *   <dt><a href="https://docs.mongodb.com/manual/reference/operator/aggregation/set/">$set</a>
  *   <dd>Supports the expressions defined in <code>{@link net.pincette.mongo.Expression}.</code>
  *   <dt>$setKey
@@ -161,8 +161,8 @@ import org.apache.kafka.streams.kstream.KStream;
  *   <dt><a href="https://docs.mongodb.com/manual/reference/operator/aggregation/unset/">$unset</a>
  *   <dt><a
  *       href="https://docs.mongodb.com/manual/reference/operator/aggregation/unwind/">$unwind</a>
- *   <dd>The boolean extension option <code>newIds</code> will cause UUIDs to be generated for for
- *       the output documents if the given array was not absent or empty.
+ *   <dd>The Boolean extension option <code>newIds</code> will cause UUIDs to be generated for the
+ *       output documents if the given array was not absent or empty.
  * </dl>
  *
  * @author Werner Donn\u00e9

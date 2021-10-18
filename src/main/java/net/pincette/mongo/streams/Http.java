@@ -3,7 +3,6 @@ package net.pincette.mongo.streams;
 import static io.netty.handler.ssl.SslContextBuilder.forClient;
 import static java.lang.String.valueOf;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.time.Duration.ofSeconds;
 import static java.util.Optional.ofNullable;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
 import static net.pincette.json.JsonUtil.createParser;
@@ -16,12 +15,12 @@ import static net.pincette.json.JsonUtil.stringValue;
 import static net.pincette.json.JsonUtil.toNative;
 import static net.pincette.json.filter.Util.stream;
 import static net.pincette.mongo.Expression.function;
-import static net.pincette.mongo.streams.Util.exceptionLogger;
+import static net.pincette.mongo.streams.Util.tryForever;
 import static net.pincette.util.Builder.create;
 import static net.pincette.util.Collections.list;
 import static net.pincette.util.StreamUtil.iterable;
+import static net.pincette.util.Util.must;
 import static net.pincette.util.Util.tryToDoRethrow;
-import static net.pincette.util.Util.tryToGetForever;
 import static net.pincette.util.Util.tryToGetRethrow;
 import static org.asynchttpclient.Dsl.asyncHttpClient;
 
@@ -46,6 +45,11 @@ import org.asynchttpclient.Request;
 import org.asynchttpclient.RequestBuilder;
 import org.asynchttpclient.Response;
 
+/**
+ * The $http operator.
+ *
+ * @author Werner Donn\u00e9
+ */
 class Http {
   private static final String AS = "as";
   private static final String BODY = "body";
@@ -120,12 +124,7 @@ class Http {
 
   private static Response execute(
       final AsyncHttpClient client, final Request request, final Context context) {
-    return tryToGetForever(
-            () -> client.executeRequest(request).toCompletableFuture(),
-            ofSeconds(5),
-            e -> exceptionLogger(e, "$http", context))
-        .toCompletableFuture()
-        .join();
+    return tryForever(() -> client.executeRequest(request).toCompletableFuture(), "$http", context);
   }
 
   private static Function<JsonObject, Response> execute(
@@ -230,11 +229,11 @@ class Http {
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
-    assert isObject(expression);
+    must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
 
-    assert expr.containsKey(METHOD) && expr.containsKey(URL);
+    must(expr.containsKey(METHOD) && expr.containsKey(URL));
 
     final String as = expr.getString(AS, null);
     final Function<JsonObject, Response> execute =

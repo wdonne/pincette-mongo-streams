@@ -7,6 +7,7 @@ import static net.pincette.json.Jslt.tryReader;
 import static net.pincette.json.JsonUtil.asString;
 import static net.pincette.json.JsonUtil.isString;
 import static net.pincette.json.JsonUtil.string;
+import static net.pincette.util.Util.must;
 import static net.pincette.util.Util.rethrow;
 import static net.pincette.util.Util.tryToGet;
 
@@ -57,7 +58,7 @@ class Jslt {
 
   static KStream<String, JsonObject> stage(
       final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
-    assert isString(expression);
+    must(isString(expression));
 
     final UnaryOperator<JsonObject> transformer = transformer(expression, context);
 

@@ -1,5 +1,6 @@
 package net.pincette.mongo.streams;
 
+import static java.time.Duration.ofSeconds;
 import static java.util.Collections.emptySet;
 import static java.util.Optional.ofNullable;
 import static java.util.logging.Level.SEVERE;
@@ -14,14 +15,18 @@ import static net.pincette.json.JsonUtil.toJsonPointer;
 import static net.pincette.json.JsonUtil.toNative;
 import static net.pincette.util.Collections.set;
 import static net.pincette.util.Pair.pair;
+import static net.pincette.util.Util.tryToGetForever;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletionStage;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonString;
 import javax.json.JsonValue;
+import net.pincette.function.SupplierWithException;
 import net.pincette.json.JsonUtil;
 import net.pincette.util.Pair;
 
@@ -31,6 +36,7 @@ import net.pincette.util.Pair;
  * @author Werner Donn\u00e9
  */
 class Util {
+  static final Duration RETRY = ofSeconds(5);
   private static final String AND = "$and";
   private static final String EQ = "$eq";
   private static final String ON = "on";
@@ -97,5 +103,14 @@ class Util {
 
   private static Optional<JsonObject> matchQuerySingle(final JsonObject json, final String field) {
     return getValue(json, toJsonPointer(field)).map(value -> eq(field, value).build());
+  }
+
+  static <T> T tryForever(
+      final SupplierWithException<CompletionStage<T>> run,
+      final String stage,
+      final Context context) {
+    return tryToGetForever(run, RETRY, e -> exceptionLogger(e, stage, context))
+        .toCompletableFuture()
+        .join();
   }
 }
