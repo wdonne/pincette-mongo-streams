@@ -140,7 +140,7 @@ class Http {
   private static Optional<JsonValue> getBody(final Response response) {
     return isJson(response)
         ? from(response.getResponseBody()).map(JsonValue.class::cast)
-        : Optional.of(response.getContentType())
+        : Optional.ofNullable(response.getContentType())
             .filter(type -> type.startsWith("text/"))
             .map(type -> createValue(response.getResponseBody(UTF_8)));
   }
