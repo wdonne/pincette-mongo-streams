@@ -3,11 +3,13 @@ package net.pincette.mongo.streams;
 import static net.pincette.json.JsonUtil.asString;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
 import static net.pincette.json.JsonUtil.isString;
+import static net.pincette.mongo.streams.Util.ID;
 import static net.pincette.util.Util.must;
 
+import java.util.concurrent.Flow.Processor;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.streams.Message;
 
 /**
  * The <code>$out</code> operator.
@@ -15,7 +17,6 @@ import org.apache.kafka.streams.kstream.KStream;
  * @author Werner Donn\u00e9
  */
 class Out {
-  private static final String ID = "_id";
   private static final String INSERT = "insert";
   private static final String INTO = "into";
   private static final String ON = "on";
@@ -25,12 +26,11 @@ class Out {
 
   private Out() {}
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression, final Context context) {
     must(isString(expression));
 
     return Merge.stage(
-        stream,
         createObjectBuilder()
             .add(INTO, asString(expression).getString())
             .add(ON, ID)

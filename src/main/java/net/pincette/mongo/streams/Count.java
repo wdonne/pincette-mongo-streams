@@ -4,11 +4,14 @@ import static javax.json.JsonValue.NULL;
 import static net.pincette.json.JsonUtil.asString;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
 import static net.pincette.json.JsonUtil.isString;
+import static net.pincette.rs.Box.box;
+import static net.pincette.rs.Mapper.map;
 import static net.pincette.util.Util.must;
 
+import java.util.concurrent.Flow.Processor;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.streams.Message;
 
 /**
  * The <code>$count</code> operator.
@@ -21,19 +24,19 @@ class Count {
 
   private Count() {}
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression, final Context context) {
     must(isString(expression));
 
     final String field = asString(expression).getString();
 
-    return Group.stage(
-            stream,
+    return box(
+        Group.stage(
             createObjectBuilder()
                 .add(ID, NULL)
                 .add(field, createObjectBuilder().add(SUM, 1))
                 .build(),
-            context)
-        .mapValues(v -> createObjectBuilder(v).remove(ID).build());
+            context),
+        map(m -> m.withValue(createObjectBuilder(m.value).remove(ID).build())));
   }
 }

@@ -9,13 +9,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
 import javax.json.JsonObject;
-import org.apache.kafka.streams.test.TestRecord;
+import net.pincette.rs.streams.Message;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class TestBucket extends Base {
   private void bucket(final String collection) {
-    final List<TestRecord<String, JsonObject>> result =
+    final List<Message<String, JsonObject>> result =
         runTest(
             a(
                 o(
@@ -42,18 +42,18 @@ class TestBucket extends Base {
                 o(f("test", v(70)))));
 
     assertEquals(12, result.size());
-    assertEquals(o(f(ID, v(0)), f("count", v(1))), result.get(0).value());
-    assertEquals(o(f(ID, v(0)), f("count", v(2))), result.get(1).value());
-    assertEquals(o(f(ID, v(0)), f("count", v(3))), result.get(2).value());
-    assertEquals(o(f(ID, v(10)), f("count", v(1))), result.get(3).value());
-    assertEquals(o(f(ID, v(10)), f("count", v(2))), result.get(4).value());
-    assertEquals(o(f(ID, v(10)), f("count", v(3))), result.get(5).value());
-    assertEquals(o(f(ID, v(10)), f("count", v(4))), result.get(6).value());
-    assertEquals(o(f(ID, v(20)), f("count", v(1))), result.get(7).value());
-    assertEquals(o(f(ID, v(20)), f("count", v(2))), result.get(8).value());
-    assertEquals(o(f(ID, v("other")), f("count", v(1))), result.get(9).value());
-    assertEquals(o(f(ID, v("other")), f("count", v(2))), result.get(10).value());
-    assertEquals(o(f(ID, v("other")), f("count", v(3))), result.get(11).value());
+    assertEquals(o(f(ID, v(0)), f("count", v(1))), result.get(0).value);
+    assertEquals(o(f(ID, v(0)), f("count", v(2))), result.get(1).value);
+    assertEquals(o(f(ID, v(0)), f("count", v(3))), result.get(2).value);
+    assertEquals(o(f(ID, v(10)), f("count", v(1))), result.get(3).value);
+    assertEquals(o(f(ID, v(10)), f("count", v(2))), result.get(4).value);
+    assertEquals(o(f(ID, v(10)), f("count", v(3))), result.get(5).value);
+    assertEquals(o(f(ID, v(10)), f("count", v(4))), result.get(6).value);
+    assertEquals(o(f(ID, v(20)), f("count", v(1))), result.get(7).value);
+    assertEquals(o(f(ID, v(20)), f("count", v(2))), result.get(8).value);
+    assertEquals(o(f(ID, v("other")), f("count", v(1))), result.get(9).value);
+    assertEquals(o(f(ID, v("other")), f("count", v(2))), result.get(10).value);
+    assertEquals(o(f(ID, v("other")), f("count", v(3))), result.get(11).value);
   }
 
   @Test

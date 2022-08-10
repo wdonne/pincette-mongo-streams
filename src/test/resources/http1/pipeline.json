@@ -1,0 +1,15 @@
+[
+  {
+    "$http": {
+      "url": {
+        "$concat": [
+          "http://localhost:9000/http1",
+          "$resource"
+        ]
+      },
+      "method": "GET",
+      "as": "result",
+      "unwind": true
+    }
+  }
+]

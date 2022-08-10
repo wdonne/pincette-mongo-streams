@@ -2,12 +2,13 @@ package net.pincette.mongo.streams;
 
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.streams.Util.generateKey;
+import static net.pincette.rs.Mapper.map;
 
+import java.util.concurrent.Flow.Processor;
 import java.util.function.Function;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.streams.Message;
 
 /**
  * The <code>$setKey</code> operator.
@@ -17,10 +18,10 @@ import org.apache.kafka.streams.kstream.KStream;
 class SetKey {
   private SetKey() {}
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression, final Context context) {
     final Function<JsonObject, JsonValue> key = function(expression, context.features);
 
-    return stream.map((k, v) -> new KeyValue<>(generateKey(key.apply(v)), v));
+    return map(m -> m.withKey(generateKey(key.apply(m.value))));
   }
 }

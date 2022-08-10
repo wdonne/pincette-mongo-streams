@@ -6,12 +6,16 @@ import static net.pincette.json.JsonUtil.createValue;
 import static net.pincette.json.JsonUtil.isArray;
 import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.mongo.Expression.function;
+import static net.pincette.rs.Box.box;
+import static net.pincette.rs.Filter.filter;
+import static net.pincette.rs.Mapper.map;
 import static net.pincette.util.Collections.map;
 import static net.pincette.util.Pair.pair;
 
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.Flow.Processor;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import javax.json.JsonArray;
@@ -19,7 +23,7 @@ import javax.json.JsonArrayBuilder;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonValue;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.streams.Message;
 
 /**
  * The <code>$redact</code> operator.
@@ -36,15 +40,17 @@ class Redact {
 
   private Redact() {}
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression, final Context context) {
     final Function<JsonObject, JsonValue> function =
         function(
             expression,
             map(pair(DESCEND_VAR, DESCEND), pair(KEEP_VAR, KEEP), pair(PRUNE_VAR, PRUNE)),
             context.features);
 
-    return stream.mapValues(v -> transform(v, function).orElse(null)).filter((k, v) -> v != null);
+    return box(
+        map(m -> m.withValue(transform(m.value, function).orElse(null))),
+        filter(m -> m.value != null));
   }
 
   private static Optional<JsonObject> transform(

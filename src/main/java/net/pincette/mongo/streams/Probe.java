@@ -6,13 +6,20 @@ import static java.time.temporal.ChronoUnit.MINUTES;
 import static java.util.Optional.empty;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
 import static net.pincette.json.JsonUtil.isObject;
+import static net.pincette.rs.Async.mapAsync;
+import static net.pincette.rs.Filter.filter;
+import static net.pincette.rs.Mapper.map;
+import static net.pincette.rs.Pipe.pipe;
+import static net.pincette.rs.Util.pull;
+import static net.pincette.rs.Util.tap;
 import static net.pincette.util.Util.must;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.Flow.Processor;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.streams.Message;
 
 /**
  * The <code>$probe</code> operator.
@@ -22,20 +29,27 @@ import org.apache.kafka.streams.kstream.KStream;
 class Probe {
   private Probe() {}
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression) {
+  private static Processor<Message<String, JsonObject>, Boolean> probe(
+      final String name, final String topic, final Context context) {
+    final Running running = new Running();
+
+    return pipe(map(
+            (Message<String, JsonObject> m) ->
+                m.withValue(updateRunning(running, name).orElse(null))))
+        .then(filter(m -> m.value != null))
+        .then(mapAsync(m -> context.producer.apply(topic, m)));
+  }
+
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression, final Context context) {
     must(isObject(expression));
 
-    final String name = expression.asJsonObject().getString("name");
-    final Running running = new Running();
-    final String topic = expression.asJsonObject().getString("topic");
-
-    stream
-        .mapValues(v -> updateRunning(running, name).orElse(null))
-        .filter((k, v) -> v != null)
-        .to(topic);
-
-    return stream;
+    return tap(
+        pull(
+            probe(
+                expression.asJsonObject().getString("name"),
+                expression.asJsonObject().getString("topic"),
+                context)));
   }
 
   private static JsonObject toJson(final Running running, final String name) {

@@ -1,0 +1,10 @@
+[
+  {
+    "_id": "message1",
+    "resource": "/resource1.json"
+  },
+  {
+    "_id": "message2",
+    "resource": "/resource2.json"
+  }
+]

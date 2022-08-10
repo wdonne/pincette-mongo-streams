@@ -5,21 +5,24 @@ import static java.util.Optional.ofNullable;
 import static java.util.logging.Level.INFO;
 import static java.util.logging.Logger.getLogger;
 import static net.pincette.json.JsonUtil.string;
+import static net.pincette.rs.Box.box;
+import static net.pincette.rs.Mapper.map;
+import static net.pincette.rs.Pipe.pipe;
 import static net.pincette.util.Collections.map;
 import static net.pincette.util.Collections.merge;
 import static net.pincette.util.Pair.pair;
 
-import com.mongodb.reactivestreams.client.MongoDatabase;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Flow.Processor;
 import java.util.logging.Logger;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.function.SideEffect;
 import net.pincette.json.JsonUtil;
-import net.pincette.mongo.Features;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.streams.Message;
+import net.pincette.util.State;
 
 /**
  * With this class you can build Kafka streams using MongoDB aggregation pipeline descriptions. All
@@ -46,6 +49,11 @@ import org.apache.kafka.streams.kstream.KStream;
  *       Note that a Kafka producer should be available in the context. Note also that message loss
  *       is possible if there is a failure in the middle of a delay. The main use-case for this
  *       operator is retry logic.
+ *   <dt>$deduplicate
+ *   <dd>With this extension operator you can filter away messages based on an expression, which
+ *       should be the value of the <code>expression</code> field. The <code>collection</code> field
+ *       is the MongoDB collection that is used for the state. The optional <code>cacheWindow</code>
+ *       field is the number of milliseconds messages are kept in a cache for duplicate checking.
  *   <dt>$delete
  *   <dd>This extension operator has a specification with the mandatory fields <code>from</code> and
  *       <code>on</code>. The former is the name of a MongoDB collection. The latter is either a
@@ -152,6 +160,9 @@ import org.apache.kafka.streams.kstream.KStream;
  *       the message itself. The operator expects an expression, the result of which will be
  *       converted to a string. Supports the expressions defined in <code>
  *       {@link net.pincette.mongo.Expression}.</code>
+ *   <dt>$throttle
+ *   <dd>With this extension operator you limit the number of messages per second that are let
+ *       through. You give it a JSON object with the integer field <code>maxPerSecond</code>.
  *   <dt>$trace
  *   <dd>This extension operator writes all JSON objects that pass through it to the Java logger
  *       "net.pinctte.mongo.streams" with level <code>INFO</code>. That is, when the operator
@@ -171,35 +182,38 @@ import org.apache.kafka.streams.kstream.KStream;
  * @see net.pincette.mongo.Expression
  */
 public class Pipeline {
-  private static final String ADD_FIELDS = "$addFields";
-  private static final String BUCKET = "$bucket";
-  private static final String COUNT = "$count";
-  private static final String DELAY = "$delay";
-  private static final String DELETE = "$delete";
-  private static final String GROUP = "$group";
-  private static final String HTTP = "$http";
-  private static final String JSLT = "$jslt";
-  private static final String LOOKUP = "$lookup";
-  private static final String MATCH = "$match";
-  private static final String MERGE = "$merge";
-  private static final String OUT = "$out";
-  private static final String PROBE = "$probe";
-  private static final String PROJECT = "$project";
-  private static final String REDACT = "$redact";
-  private static final String REPLACE_ROOT = "$replaceRoot";
-  private static final String REPLACE_WITH = "$replaceWith";
-  private static final String SEND = "$send";
-  private static final String SET = "$set";
-  private static final String SET_KEY = "$setKey";
-  private static final String TRACE = "$trace";
-  private static final String UNSET = "$unset";
-  private static final String UNWIND = "$unwind";
+  static final String ADD_FIELDS = "$addFields";
+  static final String BUCKET = "$bucket";
+  static final String COUNT = "$count";
+  static final String DEDUPLICATE = "$deduplicate";
+  static final String DELAY = "$delay";
+  static final String DELETE = "$delete";
+  static final String GROUP = "$group";
+  static final String HTTP = "$http";
+  static final String JSLT = "$jslt";
+  static final String LOOKUP = "$lookup";
+  static final String MATCH = "$match";
+  static final String MERGE = "$merge";
+  static final String OUT = "$out";
+  static final String PROBE = "$probe";
+  static final String PROJECT = "$project";
+  static final String REDACT = "$redact";
+  static final String REPLACE_ROOT = "$replaceRoot";
+  static final String REPLACE_WITH = "$replaceWith";
+  static final String SEND = "$send";
+  static final String SET = "$set";
+  static final String SET_KEY = "$setKey";
+  static final String THROTTLE = "$throttle";
+  static final String TRACE = "$trace";
+  static final String UNSET = "$unset";
+  static final String UNWIND = "$unwind";
   private static final Logger logger = getLogger("net.pincette.mongo.streams");
   private static final Map<String, Stage> stages =
       map(
           pair(ADD_FIELDS, AddFields::stage),
           pair(BUCKET, Bucket::stage),
           pair(COUNT, Count::stage),
+          pair(DEDUPLICATE, Deduplicate::stage),
           pair(DELAY, Delay::stage),
           pair(DELETE, Delete::stage),
           pair(GROUP, Group::stage),
@@ -209,7 +223,7 @@ public class Pipeline {
           pair(MATCH, Match::stage),
           pair(MERGE, Merge::stage),
           pair(OUT, Out::stage),
-          pair(PROBE, (st, ex, ctx) -> Probe.stage(st, ex)),
+          pair(PROBE, Probe::stage),
           pair(PROJECT, Project::stage),
           pair(REDACT, Redact::stage),
           pair(REPLACE_ROOT, ReplaceRoot::stage),
@@ -217,126 +231,24 @@ public class Pipeline {
           pair(SEND, Send::stage),
           pair(SET, AddFields::stage),
           pair(SET_KEY, SetKey::stage),
+          pair(THROTTLE, (ex, ctx) -> Throttle.stage(ex)),
           pair(TRACE, Trace::stage),
           pair(UNSET, Unset::stage),
-          pair(UNWIND, (st, ex, ctx) -> Unwind.stage(st, ex)));
+          pair(UNWIND, (ex, ctx) -> Unwind.stage(ex)));
 
   private Pipeline() {}
 
   /**
-   * Appends an aggregation <code>pipeline</code> to a given <code>stream</code>, resulting in a new
-   * stream. Pipeline stages that are not recognised are ignored.
+   * Creates a reactive streams processor from an aggregation <code>pipeline</code>. Pipeline stages
+   * that are not recognised are ignored.
    *
-   * @param app the application.
-   * @param stream the given Kafka stream.
-   * @param pipeline the aggregation pipeline.
-   * @param database the MongoDB database.
-   * @return The new Kafka stream.
-   * @since 1.0
-   */
-  public static KStream<String, JsonObject> create(
-      final String app,
-      final KStream<String, JsonObject> stream,
-      final JsonArray pipeline,
-      final MongoDatabase database) {
-    return create(app, stream, pipeline, database, false);
-  }
-
-  /**
-   * Appends an aggregation <code>pipeline</code> to a given <code>stream</code>, resulting in a new
-   * stream. Pipeline stages that are not recognised are ignored.
-   *
-   * @param app the application.
-   * @param stream the given Kafka stream.
-   * @param pipeline the aggregation pipeline.
-   * @param database the MongoDB database.
-   * @param trace writes tracing of the stages to the logger "net.pincette.mongo.streams" at log
-   *     level <code>INFO</code>.
-   * @return The new Kafka stream.
-   * @since 1.0
-   */
-  public static KStream<String, JsonObject> create(
-      final String app,
-      final KStream<String, JsonObject> stream,
-      final JsonArray pipeline,
-      final MongoDatabase database,
-      final boolean trace) {
-    return create(app, stream, pipeline, database, trace, null);
-  }
-
-  /**
-   * Appends an aggregation <code>pipeline</code> to a given <code>stream</code>, resulting in a new
-   * stream. Pipeline stages that are not recognised are ignored.
-   *
-   * @param app the application.
-   * @param stream the given Kafka stream.
-   * @param pipeline the aggregation pipeline.
-   * @param database the MongoDB database.
-   * @param trace writes tracing of the stages to the logger "net.pincette.mongo.streams" at log
-   *     level <code>INFO</code>.
-   * @param features extra features for the underlying MongoDB aggregation expression language and
-   *     JSLT. It may be <code>null</code>.
-   * @return The new Kafka stream.
-   * @since 1.0.1
-   */
-  public static KStream<String, JsonObject> create(
-      final String app,
-      final KStream<String, JsonObject> stream,
-      final JsonArray pipeline,
-      final MongoDatabase database,
-      final boolean trace,
-      final Features features) {
-    return create(app, stream, pipeline, database, trace, features, null);
-  }
-
-  /**
-   * Appends an aggregation <code>pipeline</code> to a given <code>stream</code>, resulting in a new
-   * stream. Pipeline stages that are not recognised are ignored.
-   *
-   * @param app the application.
-   * @param stream the given Kafka stream.
-   * @param pipeline the aggregation pipeline.
-   * @param database the MongoDB database.
-   * @param trace writes tracing of the stages to the logger "net.pincette.mongo.streams" at log
-   *     level <code>INFO</code>.
-   * @param features extra features for the underlying MongoDB aggregation expression language and
-   *     JSLT. It may be <code>null</code>.
-   * @param stageExtensions extra stages that will be merged with the built-in stages, which always
-   *     have precedence. It may be <code>null</code>.
-   * @return The new Kafka stream.
-   * @since 1.1
-   */
-  public static KStream<String, JsonObject> create(
-      final String app,
-      final KStream<String, JsonObject> stream,
-      final JsonArray pipeline,
-      final MongoDatabase database,
-      final boolean trace,
-      final Features features,
-      final Map<String, Stage> stageExtensions) {
-    return create(
-        stream,
-        pipeline,
-        new Context()
-            .withApp(app)
-            .withDatabase(database)
-            .withTrace(trace)
-            .withFeatures(features)
-            .withStageExtensions(stageExtensions));
-  }
-
-  /**
-   * Appends an aggregation <code>pipeline</code> to a given <code>stream</code>, resulting in a new
-   * stream. Pipeline stages that are not recognised are ignored.
-   *
-   * @param stream the given Kafka stream.
    * @param pipeline the aggregation pipeline.
    * @param context the context for the pipeline.
-   * @return The new Kafka stream.
-   * @since 1.2
+   * @return The processor.
+   * @since 3.0
    */
-  public static KStream<String, JsonObject> create(
-      final KStream<String, JsonObject> stream, final JsonArray pipeline, final Context context) {
+  public static Processor<Message<String, JsonObject>, Message<String, JsonObject>> create(
+      final JsonArray pipeline, final Context context) {
     final Map<String, Stage> allStages =
         context.stageExtensions != null ? merge(context.stageExtensions, stages) : stages;
 
@@ -351,36 +263,37 @@ public class Pipeline {
                             ofNullable(allStages.get(name))
                                 .map(
                                     stage ->
-                                        pair(
-                                            context.trace ? wrapProfile(stage, name) : stage,
-                                            json.getValue("/" + name)))))
+                                        (context.trace ? wrapProfile(stage, name) : stage)
+                                            .apply(json.getValue("/" + name), context))))
         .filter(Optional::isPresent)
         .map(Optional::get)
-        .reduce(stream, (s, p) -> p.first.apply(s, p.second, context), (s1, s2) -> s1);
+        .reduce(
+            null,
+            (processor, stage) -> processor == null ? stage : box(processor, stage),
+            (p1, p2) -> p1);
   }
 
-  private static KStream<String, JsonObject> markEnd(
-      final long[] start,
-      final KStream<String, JsonObject> stream,
-      final String name,
-      final JsonValue expression) {
-    return stream.mapValues(
+  private static Processor<Message<String, JsonObject>, Message<String, JsonObject>> markEnd(
+      final State<Long> start, final String name, final JsonValue expression) {
+    return map(
         v ->
-            SideEffect.<JsonObject>run(
+            SideEffect.<Message<String, JsonObject>>run(
                     () ->
                         logger.log(
                             INFO,
                             "{0} with expression {1} took {2}ms",
                             new Object[] {
-                              name, string(expression), now().toEpochMilli() - start[0]
+                              name, string(expression), now().toEpochMilli() - start.get()
                             }))
                 .andThenGet(() -> v));
   }
 
-  private static KStream<String, JsonObject> markStart(
-      final long[] start, final KStream<String, JsonObject> stream) {
-    return stream.mapValues(
-        v -> SideEffect.<JsonObject>run(() -> start[0] = now().toEpochMilli()).andThenGet(() -> v));
+  private static Processor<Message<String, JsonObject>, Message<String, JsonObject>> markStart(
+      final State<Long> start) {
+    return map(
+        v ->
+            SideEffect.<Message<String, JsonObject>>run(() -> start.set(now().toEpochMilli()))
+                .andThenGet(() -> v));
   }
 
   private static Optional<String> name(final JsonObject json) {
@@ -390,10 +303,11 @@ public class Pipeline {
   }
 
   private static Stage wrapProfile(final Stage stage, final String name) {
-    final long[] start = new long[1];
+    final State<Long> start = new State<>();
 
-    return (stream, expression, context) ->
-        markEnd(
-            start, stage.apply(markStart(start, stream), expression, context), name, expression);
+    return (expression, context) ->
+        pipe(markStart(start))
+            .then(stage.apply(expression, context))
+            .then(markEnd(start, name, expression));
   }
 }

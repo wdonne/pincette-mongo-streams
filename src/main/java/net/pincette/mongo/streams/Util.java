@@ -36,6 +36,7 @@ import net.pincette.util.Pair;
  * @author Werner Donn\u00e9
  */
 class Util {
+  static final String ID = "_id";
   static final Duration RETRY = ofSeconds(5);
   private static final String AND = "$and";
   private static final String EQ = "$eq";
@@ -105,12 +106,10 @@ class Util {
     return getValue(json, toJsonPointer(field)).map(value -> eq(field, value).build());
   }
 
-  static <T> T tryForever(
+  static <T> CompletionStage<T> tryForever(
       final SupplierWithException<CompletionStage<T>> run,
       final String stage,
       final Context context) {
-    return tryToGetForever(run, RETRY, e -> exceptionLogger(e, stage, context))
-        .toCompletableFuture()
-        .join();
+    return tryToGetForever(run, RETRY, e -> exceptionLogger(e, stage, context));
   }
 }

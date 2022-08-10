@@ -22,7 +22,7 @@ import java.util.Optional;
 import javax.json.JsonArrayBuilder;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
-import org.apache.kafka.streams.test.TestRecord;
+import net.pincette.rs.streams.Message;
 import org.bson.Document;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,7 +50,7 @@ class TestLookup extends Base {
   private JsonObject lookup(final JsonObject message, final boolean inner, final int resultSize) {
     prepare();
 
-    final List<TestRecord<String, JsonObject>> result =
+    final List<Message<String, JsonObject>> result =
         runTest(
             a(
                 o(
@@ -68,7 +68,7 @@ class TestLookup extends Base {
 
     return Optional.of(result)
         .filter(r -> !r.isEmpty())
-        .map(r -> r.get(0).value())
+        .map(r -> r.get(0).value)
         .map(
             json ->
                 copy(json, createObjectBuilder())
@@ -80,7 +80,7 @@ class TestLookup extends Base {
   private JsonObject lookupPipeline(final JsonObject message) {
     prepare();
 
-    final List<TestRecord<String, JsonObject>> result =
+    final List<Message<String, JsonObject>> result =
         runTest(
             a(
                 o(
@@ -95,7 +95,7 @@ class TestLookup extends Base {
 
     assertEquals(1, result.size());
 
-    final JsonObject json = result.get(0).value();
+    final JsonObject json = result.get(0).value;
 
     return copy(json, createObjectBuilder()).add(OTHER, sort(json.getJsonArray(OTHER))).build();
   }
@@ -174,7 +174,7 @@ class TestLookup extends Base {
   void lookup10() {
     prepare();
 
-    final List<TestRecord<String, JsonObject>> result =
+    final List<Message<String, JsonObject>> result =
         runTest(
             a(
                 o(
@@ -194,7 +194,7 @@ class TestLookup extends Base {
     assertEquals(
         list(MESSAGE1, MESSAGE2),
         result.stream()
-            .map(TestRecord::value)
+            .map(m -> m.value)
             .map(v -> v.getJsonObject(OTHER))
             .sorted(comparing(v -> v.getString(ID)))
             .collect(toList()));

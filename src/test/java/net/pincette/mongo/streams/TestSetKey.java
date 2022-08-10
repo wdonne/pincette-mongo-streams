@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
 import javax.json.JsonObject;
-import org.apache.kafka.streams.test.TestRecord;
+import net.pincette.rs.streams.Message;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -20,11 +20,11 @@ class TestSetKey extends Base {
   @Test
   @DisplayName("$setKey")
   void count() {
-    final List<TestRecord<String, JsonObject>> result =
+    final List<Message<String, JsonObject>> result =
         runTest(a(o(f("$setKey", v("$test")))), MESSAGES);
 
     assertEquals(1, result.size());
-    assertEquals(MESSAGE, result.get(0).value());
-    assertEquals("1", result.get(0).key());
+    assertEquals(MESSAGE, result.get(0).value);
+    assertEquals("1", result.get(0).key);
   }
 }

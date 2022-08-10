@@ -1,6 +1,7 @@
 package net.pincette.mongo.streams;
 
 import static java.util.UUID.randomUUID;
+import static java.util.stream.Collectors.toList;
 import static javax.json.JsonValue.NULL;
 import static net.pincette.json.JsonUtil.asString;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
@@ -9,14 +10,22 @@ import static net.pincette.json.JsonUtil.getArray;
 import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.json.JsonUtil.isString;
 import static net.pincette.json.JsonUtil.toJsonPointer;
+import static net.pincette.mongo.streams.Util.ID;
+import static net.pincette.rs.Box.box;
+import static net.pincette.rs.Chain.with;
+import static net.pincette.rs.Filter.filter;
+import static net.pincette.rs.Flatten.flatMap;
+import static net.pincette.rs.streams.Message.message;
 import static net.pincette.util.Builder.create;
-import static net.pincette.util.StreamUtil.iterable;
 import static net.pincette.util.StreamUtil.rangeExclusive;
 import static net.pincette.util.StreamUtil.zip;
 import static net.pincette.util.Util.must;
 
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.concurrent.Flow.Processor;
+import java.util.concurrent.Flow.Publisher;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import javax.json.JsonArray;
@@ -24,8 +33,8 @@ import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonValue;
 import net.pincette.json.JsonUtil;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.Source;
+import net.pincette.rs.streams.Message;
 
 /**
  * The <code>$unwind</code> operator.
@@ -33,7 +42,6 @@ import org.apache.kafka.streams.kstream.KStream;
  * @author Werner Donn\u00e9
  */
 class Unwind {
-  private static final String ID = "_id";
   private static final String INCLUDE_ARRAY_INDEX = "includeArrayIndex";
   private static final String NEW_IDS = "newIds";
   private static final String PATH = "path";
@@ -75,8 +83,8 @@ class Unwind {
             (b1, b2) -> b1);
   }
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression) {
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression) {
     must(isObject(expression) || isString(expression));
 
     final String includeArrayIndex =
@@ -93,29 +101,27 @@ class Unwind {
             .map(json -> json.getBoolean(PRESERVE_NULL_AND_EMPTY_ARRAYS, false))
             .orElse(false);
 
-    return stream
-        .filter((k, v) -> preserveNullAndEmptyArrays || hasArray(v, path))
-        .flatMap(
-            (k, v) ->
-                iterable(
-                    unwind(v, path, includeArrayIndex, newIds)
-                        .map(
-                            unwound ->
-                                new KeyValue<>(newIds ? unwound.getString(ID) : k, unwound))));
+    return box(
+        filter(m -> preserveNullAndEmptyArrays || hasArray(m.value, path)),
+        flatMap(
+            m ->
+                with(unwind(m.value, path, includeArrayIndex, newIds))
+                    .map(unwound -> message(newIds ? unwound.getString(ID) : m.key, unwound))
+                    .get()));
   }
 
-  private static Stream<JsonObject> unwind(
+  private static Publisher<JsonObject> unwind(
       final JsonObject json,
       final String path,
       final String includeArrayIndex,
       final boolean newIds) {
     return getArray(json, toJsonPointer(path))
         .filter(array -> !array.isEmpty())
-        .map(array -> unwind(json, path, array, includeArrayIndex, newIds))
-        .orElseGet(() -> emptyArray(json, includeArrayIndex));
+        .map(array -> Source.of(unwind(json, path, array, includeArrayIndex, newIds)))
+        .orElseGet(() -> Source.of(emptyArray(json, includeArrayIndex).collect(toList())));
   }
 
-  private static Stream<JsonObject> unwind(
+  private static List<JsonObject> unwind(
       final JsonObject json,
       final String path,
       final JsonArray array,
@@ -129,6 +135,7 @@ class Unwind {
                     .updateIf(
                         b -> includeArrayIndex != null, b -> b.add(includeArrayIndex, pair.second))
                     .build()
-                    .build());
+                    .build())
+        .collect(toList());
   }
 }

@@ -16,10 +16,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
+import java.util.concurrent.CompletionException;
+import javax.json.JsonArray;
 import javax.json.JsonObject;
 import net.pincette.json.JsonUtil;
-import net.pincette.util.Util.GeneralException;
-import org.apache.kafka.streams.test.TestRecord;
+import net.pincette.rs.streams.Message;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -36,7 +37,7 @@ class TestMerge extends Base {
   void merge1() {
     drop(COLLECTION);
 
-    final List<TestRecord<String, JsonObject>> result =
+    final List<Message<String, JsonObject>> result =
         runTest(
             a(
                 o(
@@ -49,7 +50,7 @@ class TestMerge extends Base {
             list(MESSAGE1));
 
     assertEquals(1, result.size());
-    assertEquals(MESSAGE1, result.get(0).value());
+    assertEquals(MESSAGE1, result.get(0).value);
     assertEquals(
         MESSAGE1,
         findOne(resources.database.getCollection(COLLECTION), eq(ID, "0"))
@@ -63,7 +64,7 @@ class TestMerge extends Base {
   void merge2() {
     drop(COLLECTION);
 
-    final List<TestRecord<String, JsonObject>> result =
+    final List<Message<String, JsonObject>> result =
         runTest(
             a(
                 o(
@@ -86,21 +87,17 @@ class TestMerge extends Base {
   @Test
   @DisplayName("$merge 3")
   void merge3() {
+    final List<JsonObject> messages = list(MESSAGE1);
+    final JsonArray pipeline =
+        a(
+            o(
+                f(
+                    "$merge",
+                    o(f("into", v(COLLECTION)), f("on", v(ID)), f("whenNotMatched", v("fail"))))));
+
     drop(COLLECTION);
 
-    assertThrows(
-        GeneralException.class,
-        () ->
-            runTest(
-                a(
-                    o(
-                        f(
-                            "$merge",
-                            o(
-                                f("into", v(COLLECTION)),
-                                f("on", v(ID)),
-                                f("whenNotMatched", v("fail")))))),
-                list(MESSAGE1)));
+    assertThrows(CompletionException.class, () -> runTest(pipeline, messages));
   }
 
   @Test
@@ -124,6 +121,10 @@ class TestMerge extends Base {
   @Test
   @DisplayName("$merge 7")
   void merge7() {
+    final List<JsonObject> messages = list(NEW_MESSAGE);
+    final JsonArray pipeline =
+        a(o(f("$merge", o(f("into", v(COLLECTION)), f("on", v(ID)), f("whenMatched", v("fail"))))));
+
     drop(COLLECTION);
 
     update(resources.database.getCollection(COLLECTION), MESSAGE2)
@@ -131,19 +132,7 @@ class TestMerge extends Base {
         .toCompletableFuture()
         .join();
 
-    assertThrows(
-        GeneralException.class,
-        () ->
-            runTest(
-                a(
-                    o(
-                        f(
-                            "$merge",
-                            o(
-                                f("into", v(COLLECTION)),
-                                f("on", v(ID)),
-                                f("whenMatched", v("fail")))))),
-                list(NEW_MESSAGE)));
+    assertThrows(CompletionException.class, () -> runTest(pipeline, messages));
   }
 
   private void mergeExisting(final String action, final JsonObject expected) {
@@ -156,7 +145,7 @@ class TestMerge extends Base {
         .toCompletableFuture()
         .join();
 
-    final List<TestRecord<String, JsonObject>> result =
+    final List<Message<String, JsonObject>> result =
         runTest(
             a(
                 o(
@@ -170,7 +159,7 @@ class TestMerge extends Base {
             list(NEW_MESSAGE));
 
     assertEquals(1, result.size());
-    assertEquals(expected, result.get(0).value());
+    assertEquals(expected, result.get(0).value);
     assertEquals(
         expected,
         findOne(

@@ -7,17 +7,19 @@ import static net.pincette.json.Jslt.tryReader;
 import static net.pincette.json.JsonUtil.asString;
 import static net.pincette.json.JsonUtil.isString;
 import static net.pincette.json.JsonUtil.string;
+import static net.pincette.rs.Mapper.map;
+import static net.pincette.rs.streams.Message.message;
 import static net.pincette.util.Util.must;
 import static net.pincette.util.Util.rethrow;
 import static net.pincette.util.Util.tryToGet;
 
 import java.util.Optional;
+import java.util.concurrent.Flow.Processor;
 import java.util.function.UnaryOperator;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.function.SideEffect;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.streams.Message;
 
 /**
  * The <code>$jslt</code> operator.
@@ -56,19 +58,18 @@ class Jslt {
         .orElse(null);
   }
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression, final Context context) {
     must(isString(expression));
 
     final UnaryOperator<JsonObject> transformer = transformer(expression, context);
 
-    return stream.map(
-        (k, v) ->
-            Optional.of(logCall(transformer, v, expression, context))
+    return map(
+        m ->
+            Optional.of(logCall(transformer, m.value, expression, context))
                 .map(
-                    result ->
-                        new KeyValue<>(ofNullable(result.getString(ID, null)).orElse(k), result))
-                .orElseGet(() -> new KeyValue<>(k, v)));
+                    result -> message(ofNullable(result.getString(ID, null)).orElse(m.key), result))
+                .orElse(m));
   }
 
   private static UnaryOperator<JsonObject> transformer(

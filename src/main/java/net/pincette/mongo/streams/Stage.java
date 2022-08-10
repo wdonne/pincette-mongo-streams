@@ -1,17 +1,18 @@
 package net.pincette.mongo.streams;
 
+import java.util.concurrent.Flow.Processor;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.streams.Message;
 
 /**
- * The interface for a pipeline stage. An implementation should return another stream.
+ * The interface for a pipeline stage.
  *
  * @author Werner Donn\u00e9
- * @since 1.1
+ * @since 3.0
  */
 @FunctionalInterface
 public interface Stage {
-  KStream<String, JsonObject> apply(
-      KStream<String, JsonObject> stream, JsonValue expression, Context context);
+  Processor<Message<String, JsonObject>, Message<String, JsonObject>> apply(
+      JsonValue expression, Context context);
 }

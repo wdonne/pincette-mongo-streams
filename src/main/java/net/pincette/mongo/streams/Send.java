@@ -1,20 +1,23 @@
 package net.pincette.mongo.streams;
 
-import static net.pincette.jes.util.Kafka.send;
+import static java.util.concurrent.CompletableFuture.completedFuture;
 import static net.pincette.json.JsonUtil.asString;
 import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.mongo.Expression.function;
+import static net.pincette.mongo.streams.Pipeline.SEND;
 import static net.pincette.mongo.streams.Util.tryForever;
+import static net.pincette.rs.Async.mapAsync;
+import static net.pincette.rs.Box.box;
+import static net.pincette.rs.Filter.filter;
 import static net.pincette.util.Util.must;
 
 import java.util.Optional;
+import java.util.concurrent.Flow.Processor;
 import java.util.function.Function;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.json.JsonUtil;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.streams.Message;
 
 /**
  * The $send operator.
@@ -26,8 +29,8 @@ class Send {
 
   private Send() {}
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression, final Context context) {
     must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
@@ -37,22 +40,22 @@ class Send {
     final Function<JsonObject, JsonValue> topic =
         function(expr.getValue("/" + TOPIC), context.features);
 
-    return stream
-        .map(
-            (k, v) ->
-                Optional.of(topic.apply(v))
+    return box(
+        mapAsync(
+            (Message<String, JsonObject> m) ->
+                Optional.of(topic.apply(m.value))
                     .filter(JsonUtil::isString)
                     .map(
                         t ->
                             tryForever(
                                 () ->
-                                    send(
-                                            context.producer,
-                                            new ProducerRecord<>(asString(t).getString(), k, v))
-                                        .thenApply(result -> new KeyValue<>(k, (JsonObject) null)),
-                                "$send",
+                                    context
+                                        .producer
+                                        .apply(asString(t).getString(), m)
+                                        .thenApply(result -> m.withValue(null)),
+                                SEND,
                                 context))
-                    .orElseGet(() -> new KeyValue<>(k, v)))
-        .filter((k, v) -> v != null);
+                    .orElseGet(() -> completedFuture(m))),
+        filter(m -> m.value != null));
   }
 }

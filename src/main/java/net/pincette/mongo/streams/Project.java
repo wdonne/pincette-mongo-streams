@@ -14,6 +14,7 @@ import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.json.JsonUtil.toJsonPointer;
 import static net.pincette.json.Transform.transform;
 import static net.pincette.mongo.Expression.function;
+import static net.pincette.rs.Mapper.map;
 import static net.pincette.util.Collections.map;
 import static net.pincette.util.Collections.set;
 import static net.pincette.util.Collections.union;
@@ -24,6 +25,7 @@ import static net.pincette.util.Util.must;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.Flow.Processor;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import javax.json.JsonObject;
@@ -32,7 +34,7 @@ import net.pincette.json.JsonUtil;
 import net.pincette.json.Transform.JsonEntry;
 import net.pincette.json.Transform.Transformer;
 import net.pincette.mongo.Features;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.streams.Message;
 
 /**
  * The <code>$project</code> operator.
@@ -118,8 +120,8 @@ class Project {
     return allPaths(path, ".").anyMatch(includes::contains);
   }
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression, final Context context) {
     must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
@@ -137,7 +139,7 @@ class Project {
             || (exclude.size() == 1 && exclude.contains(ID))
             || (include.isEmpty() && updates.isEmpty()));
 
-    return stream.mapValues(v -> project(v, include, exclude, updates));
+    return map(m -> m.withValue(project(m.value, include, exclude, updates)));
   }
 
   private static boolean update(final JsonValue value) {

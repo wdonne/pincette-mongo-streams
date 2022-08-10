@@ -11,13 +11,14 @@ import static net.pincette.util.Builder.create;
 import static net.pincette.util.StreamUtil.slide;
 import static net.pincette.util.Util.must;
 
+import java.util.concurrent.Flow.Processor;
 import javax.json.JsonArray;
 import javax.json.JsonArrayBuilder;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonValue;
 import net.pincette.json.JsonUtil;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.streams.Message;
 
 /**
  * The <code>$bucket</code> operator.
@@ -69,8 +70,8 @@ class Bucket {
     return slide(boundaries.stream(), 2).allMatch(list -> compare(list.get(0), list.get(1)) < 0);
   }
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression, final Context context) {
     must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
@@ -79,7 +80,7 @@ class Bucket {
     must(boundaries != null && boundaries.size() >= 2 && ordered(boundaries));
 
     return Group.stage(
-        stream, toGroup(expr, boundaries, getValue(expr, "/" + DEFAULT).orElse(null)), context);
+        toGroup(expr, boundaries, getValue(expr, "/" + DEFAULT).orElse(null)), context);
   }
 
   private static JsonObject toGroup(

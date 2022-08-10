@@ -13,10 +13,16 @@ import static net.pincette.json.JsonUtil.string;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.JsonClient.findOne;
 import static net.pincette.mongo.JsonClient.insert;
+import static net.pincette.mongo.streams.Util.ID;
 import static net.pincette.mongo.streams.Util.RETRY;
 import static net.pincette.mongo.streams.Util.exceptionLogger;
 import static net.pincette.mongo.streams.Util.matchFields;
 import static net.pincette.mongo.streams.Util.matchQuery;
+import static net.pincette.rs.Async.mapAsync;
+import static net.pincette.rs.Filter.filter;
+import static net.pincette.rs.Mapper.map;
+import static net.pincette.rs.Pipe.pipe;
+import static net.pincette.util.Pair.pair;
 import static net.pincette.util.ScheduledCompletionStage.composeAsyncAfter;
 import static net.pincette.util.Util.must;
 import static net.pincette.util.Util.rethrow;
@@ -25,12 +31,12 @@ import com.mongodb.reactivestreams.client.MongoCollection;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow.Processor;
 import java.util.function.Function;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.mongo.JsonClient;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.streams.Message;
 import org.bson.Document;
 
 /**
@@ -40,7 +46,6 @@ import org.bson.Document;
  */
 class Merge {
   private static final String FAIL = "fail";
-  private static final String ID = "_id";
   private static final String INSERT = "insert";
   private static final String INTO = "into";
   private static final String KEEP_EXISTING = "keepExisting";
@@ -70,7 +75,7 @@ class Merge {
     return expression.getString(WHEN_MATCHED, MERGE_FIELD);
   }
 
-  private static JsonObject process(
+  private static CompletionStage<JsonObject> process(
       final JsonObject fromStream,
       final JsonValue key,
       final JsonObject query,
@@ -91,16 +96,15 @@ class Merge {
                 rethrow(t.getCause());
               }
 
-              return composeAsyncAfter(
-                      () ->
-                          completedFuture(
-                              process(fromStream, key, query, expression, collection, context)),
-                      RETRY)
-                  .toCompletableFuture()
-                  .join();
+              return null;
             })
-        .toCompletableFuture()
-        .join();
+        .thenComposeAsync(
+            value ->
+                value == null
+                    ? composeAsyncAfter(
+                        () -> process(fromStream, key, query, expression, collection, context),
+                        RETRY)
+                    : completedFuture(value));
   }
 
   private static CompletionStage<JsonObject> processExisting(
@@ -141,8 +145,17 @@ class Merge {
     }
   }
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+  private static Message<String, JsonObject> setId(
+      final Message<String, JsonObject> message, final JsonObject newValue) {
+    return message.withValue(
+        ofNullable(message.value.get(ID))
+            .filter(id -> !newValue.isEmpty())
+            .map(id -> addId(newValue, id))
+            .orElse(newValue));
+  }
+
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression, final Context context) {
     must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
@@ -153,20 +166,23 @@ class Merge {
         function(
             getValue(expr, "/" + KEY).orElseGet(() -> createValue("$" + ID)), context.features);
 
-    return stream
-        .mapValues(
-            v ->
-                matchQuery(v, fields)
-                    .map(query -> process(v, key.apply(v), query, expr, collection, context))
-                    .map(
-                        newValue ->
-                            ofNullable(v.get(ID))
-                                .filter(id -> !newValue.isEmpty())
-                                .map(id -> addId(newValue, id))
-                                .orElse(newValue))
-                    .orElseThrow(() -> exception(expr)))
-        .filter((k, v) -> !v.isEmpty())
-        .map((k, v) -> new KeyValue<>(ofNullable(v.get(ID)).map(Util::generateKey).orElse(k), v));
+    return pipe(map(
+            (Message<String, JsonObject> m) ->
+                pair(m, matchQuery(m.value, fields).orElseThrow(() -> exception(expr)))))
+        .then(
+            mapAsync(
+                pair ->
+                    process(
+                            pair.first.value,
+                            key.apply(pair.first.value),
+                            pair.second,
+                            expr,
+                            collection,
+                            context)
+                        .thenApply(newValue -> setId(pair.first, newValue))))
+        .then(filter(m -> !m.value.isEmpty()))
+        .then(
+            map(m -> m.withKey(ofNullable(m.value.get(ID)).map(Util::generateKey).orElse(m.key))));
   }
 
   private static CompletionStage<JsonObject> update(

@@ -16,11 +16,17 @@ import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.Expression.replaceVariables;
 import static net.pincette.mongo.JsonClient.aggregate;
 import static net.pincette.mongo.JsonClient.aggregationPublisher;
+import static net.pincette.mongo.streams.Pipeline.LOOKUP;
+import static net.pincette.mongo.streams.Pipeline.MATCH;
 import static net.pincette.mongo.streams.Util.RETRY;
 import static net.pincette.mongo.streams.Util.exceptionLogger;
 import static net.pincette.mongo.streams.Util.tryForever;
+import static net.pincette.rs.Async.mapAsync;
 import static net.pincette.rs.Chain.with;
-import static net.pincette.rs.Util.iterate;
+import static net.pincette.rs.Filter.filter;
+import static net.pincette.rs.Flatten.flatMap;
+import static net.pincette.rs.Mapper.map;
+import static net.pincette.rs.Pipe.pipe;
 import static net.pincette.rs.Util.retryPublisher;
 import static net.pincette.util.Collections.map;
 import static net.pincette.util.Pair.pair;
@@ -30,14 +36,16 @@ import com.mongodb.reactivestreams.client.MongoDatabase;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow.Processor;
+import java.util.concurrent.Flow.Publisher;
 import java.util.function.Function;
 import javax.json.JsonArray;
 import javax.json.JsonArrayBuilder;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.mongo.Features;
-import org.apache.kafka.streams.kstream.KStream;
-import org.reactivestreams.Publisher;
+import net.pincette.rs.streams.Message;
 
 /**
  * The <code>$lookup</code> operator.
@@ -53,7 +61,6 @@ class Lookup {
   private static final String IN = "$in";
   private static final String INNER = "inner";
   private static final String LET = "let";
-  private static final String MATCH = "$match";
   private static final String LOCAL_FIELD = "localField";
   private static final String PIPELINE = "pipeline";
   private static final String UNWIND = "unwind";
@@ -66,7 +73,7 @@ class Lookup {
         .map(pair -> create(pair.first).getDatabase(pair.second));
   }
 
-  private static JsonArrayBuilder lookup(
+  private static CompletionStage<JsonArrayBuilder> lookup(
       final String collection, final JsonArray query, final Context context) {
     return tryForever(
         () ->
@@ -75,7 +82,7 @@ class Lookup {
                     list ->
                         list.stream()
                             .reduce(createArrayBuilder(), JsonArrayBuilder::add, (b1, b2) -> b1)),
-        "$lookup",
+        LOOKUP,
         context);
   }
 
@@ -108,8 +115,8 @@ class Lookup {
         .collect(toMap(Entry::getKey, e -> e.getValue().apply(json)));
   }
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression, final Context context) {
     must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
@@ -121,23 +128,34 @@ class Lookup {
     final boolean unwind = expr.getBoolean(UNWIND, false);
 
     return unwind
-        ? stream.flatMapValues(
-            v ->
-                iterate(
-                    with(lookupPublisher(from, queryFunction.apply(v), localContext))
-                        .map(result -> createObjectBuilder(v).add(as, result).build())
-                        .get()))
-        : stream
-            .mapValues(
-                v ->
-                    createObjectBuilder(v)
-                        .add(as, lookup(from, queryFunction.apply(v), localContext))
-                        .build())
-            .filter((k, v) -> !inner || !v.getJsonArray(as).isEmpty());
+        ? flatMap(
+            m ->
+                unwindResult(
+                    m, lookupPublisher(from, queryFunction.apply(m.value), localContext), as))
+        : pipe(mapAsync(
+                (Message<String, JsonObject> m) ->
+                    lookup(from, queryFunction.apply(m.value), localContext)
+                        .thenApply(builder -> pair(m, builder))))
+            .then(
+                map(
+                    pair ->
+                        pair.first.withValue(
+                            createObjectBuilder(pair.first.value).add(as, pair.second).build())))
+            .then(filter(m -> !inner || !m.value.getJsonArray(as).isEmpty()));
   }
 
   private static JsonValue toArray(final JsonValue value) {
     return isArray(value) ? value : a(value);
+  }
+
+  private static Publisher<Message<String, JsonObject>> unwindResult(
+      final Message<String, JsonObject> message,
+      final Publisher<JsonObject> results,
+      final String as) {
+    return with(results)
+        .map(
+            result -> message.withValue(createObjectBuilder(message.value).add(as, result).build()))
+        .get();
   }
 
   private static Map<String, Function<JsonObject, JsonValue>> variables(

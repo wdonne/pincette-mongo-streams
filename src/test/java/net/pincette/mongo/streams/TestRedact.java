@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
 import javax.json.JsonObject;
-import org.apache.kafka.streams.test.TestRecord;
+import net.pincette.rs.streams.Message;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +17,7 @@ class TestRedact extends Base {
   @Test
   @DisplayName("$redact")
   void redact() {
-    final List<TestRecord<String, JsonObject>> result =
+    final List<Message<String, JsonObject>> result =
         runTest(
             a(
                 o(
@@ -63,6 +63,6 @@ class TestRedact extends Base {
                 a(
                     o(f("test", v(0)), f("v", v(0))),
                     o(f("test", v(1)), f("v", v(0)), f("sub", o(f("test", v(2)))))))),
-        result.get(0).value());
+        result.get(0).value);
   }
 }

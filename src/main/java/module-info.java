@@ -1,7 +1,6 @@
 module net.pincette.mongo.streams {
   requires java.json;
   requires net.pincette.json;
-  requires kafka.streams;
   requires org.mongodb.driver.reactivestreams;
   requires net.pincette.common;
   requires net.pincette.mongo;
@@ -9,10 +8,13 @@ module net.pincette.mongo.streams {
   requires org.mongodb.bson;
   requires org.mongodb.driver.core;
   requires io.netty.handler;
-  requires async.http.client;
   requires net.pincette.rs;
+  requires net.pincette.rs.json;
+  requires net.pincette.rs.streams;
   requires org.reactivestreams;
-  requires kafka.clients;
-  requires net.pincette.jes.util;
+  requires net.pincette.netty.http;
+  requires io.netty.buffer;
+  requires io.netty.codec.http;
+
   exports net.pincette.mongo.streams;
 }

@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.List;
 import javax.json.JsonObject;
 import net.pincette.json.JsonUtil;
-import org.apache.kafka.streams.test.TestRecord;
+import net.pincette.rs.streams.Message;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -21,11 +21,11 @@ class TestOut extends Base {
   @DisplayName("$out")
   void out() {
     final JsonObject message = o(f(ID, v("0")));
-    final List<TestRecord<String, JsonObject>> result =
+    final List<Message<String, JsonObject>> result =
         runTest(a(o(f("$out", v("pincette-mongo-streams-test")))), list(message));
 
     assertEquals(1, result.size());
-    assertEquals(message, result.get(0).value());
+    assertEquals(message, result.get(0).value);
     assertEquals(
         message,
         findOne(resources.database.getCollection("pincette-mongo-streams-test"), eq(ID, "0"))

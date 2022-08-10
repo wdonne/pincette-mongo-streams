@@ -34,7 +34,12 @@ import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.JsonClient.findOne;
 import static net.pincette.mongo.JsonClient.update;
 import static net.pincette.mongo.Util.compare;
+import static net.pincette.mongo.streams.Util.ID;
 import static net.pincette.mongo.streams.Util.generateKey;
+import static net.pincette.rs.Filter.filter;
+import static net.pincette.rs.Mapper.map;
+import static net.pincette.rs.Pipe.pipe;
+import static net.pincette.rs.streams.Message.message;
 import static net.pincette.util.Collections.map;
 import static net.pincette.util.Pair.pair;
 import static net.pincette.util.Util.must;
@@ -46,6 +51,7 @@ import java.security.MessageDigest;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.concurrent.Flow.Processor;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 import java.util.function.Function;
@@ -60,9 +66,9 @@ import javax.json.JsonStructure;
 import javax.json.JsonValue;
 import net.pincette.json.JsonUtil;
 import net.pincette.mongo.Features;
+import net.pincette.rs.Mapper;
+import net.pincette.rs.streams.Message;
 import net.pincette.util.Pair;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.KStream;
 import org.bson.Document;
 
 /**
@@ -77,7 +83,6 @@ class Group {
   private static final String AVG_OP = "$avg";
   private static final String COLLECTION = "_collection";
   private static final String COUNT = "count";
-  private static final String ID = "_id";
   private static final String MAX = "$max";
   private static final String MERGE_OBJECTS = "$mergeObjects";
   private static final String MIN = "$min";
@@ -359,8 +364,8 @@ class Group {
     return functionsPerField(expression, (op, expr) -> selectors.get(op));
   }
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression, final Context context) {
     must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
@@ -377,11 +382,11 @@ class Group {
       logger.log(INFO, "$group collection {0}", collection);
     }
 
-    return stream
-        .map((k, v) -> new KeyValue<>(key.apply(v), v))
-        .map((k, v) -> new KeyValue<>(k, aggregator.apply(k, v)))
-        .filter((k, v) -> v != null && hasId(v))
-        .map((k, v) -> new KeyValue<>(generateKey(k), v));
+    return pipe(Mapper.<Message<String, JsonObject>, Pair<JsonValue, JsonObject>>map(
+            m -> pair(key.apply(m.value), m.value)))
+        .then(map(pair -> pair(pair.first, aggregator.apply(pair.first, pair.second))))
+        .then(filter(pair -> pair.second != null && hasId(pair.second)))
+        .then(map(pair -> message(generateKey(pair.first), pair.second)));
   }
 
   private static Operator stdDevPop(final JsonValue expression, final Features features) {

@@ -6,11 +6,12 @@ import static net.pincette.json.JsonUtil.isArray;
 import static net.pincette.json.JsonUtil.isString;
 import static net.pincette.util.Util.must;
 
+import java.util.concurrent.Flow.Processor;
 import javax.json.JsonObject;
 import javax.json.JsonString;
 import javax.json.JsonValue;
 import net.pincette.json.JsonUtil;
-import org.apache.kafka.streams.kstream.KStream;
+import net.pincette.rs.streams.Message;
 
 /**
  * The <code>$unset</code> operator.
@@ -20,12 +21,11 @@ import org.apache.kafka.streams.kstream.KStream;
 class Unset {
   private Unset() {}
 
-  static KStream<String, JsonObject> stage(
-      final KStream<String, JsonObject> stream, final JsonValue expression, final Context context) {
+  static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
+      final JsonValue expression, final Context context) {
     must(isArray(expression) || isString(expression));
 
     return Project.stage(
-        stream,
         isArray(expression)
             ? expression.asJsonArray().stream()
                 .filter(JsonUtil::isString)
