@@ -59,7 +59,13 @@ class Util {
   }
 
   static void exceptionLogger(final Throwable t, final String stage, final Context context) {
-    ofNullable(context.logger).ifPresent(l -> l.log(SEVERE, stage, t));
+    exceptionLogger(t, stage, null, context);
+  }
+
+  static void exceptionLogger(
+      final Throwable t, final String stage, final String message, final Context context) {
+    ofNullable(context.logger)
+        .ifPresent(l -> l.log(SEVERE, t, () -> stage + (message != null ? (", " + message) : "")));
   }
 
   static String generateKey(final JsonValue key) {
@@ -110,6 +116,14 @@ class Util {
       final SupplierWithException<CompletionStage<T>> run,
       final String stage,
       final Context context) {
-    return tryToGetForever(run, RETRY, e -> exceptionLogger(e, stage, context));
+    return tryForever(run, stage, null, context);
+  }
+
+  static <T> CompletionStage<T> tryForever(
+      final SupplierWithException<CompletionStage<T>> run,
+      final String stage,
+      final String message,
+      final Context context) {
+    return tryToGetForever(run, RETRY, e -> exceptionLogger(e, stage, message, context));
   }
 }

@@ -1,0 +1,10 @@
+[
+  {
+    "_id": "message1",
+    "resource": "/not_found.json",
+    "httpError": {
+      "statusCode": 404,
+      "body": null
+    }
+  }
+]

@@ -1,11 +1,9 @@
 package net.pincette.mongo.streams;
 
-import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
-import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
-import static io.netty.handler.ssl.SslContextBuilder.forClient;
-import static java.nio.ByteBuffer.wrap;
+import static java.lang.Long.MAX_VALUE;
 import static java.util.Optional.ofNullable;
-import static javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm;
+import static java.util.concurrent.CompletableFuture.completedFuture;
+import static javax.json.JsonValue.NULL;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
 import static net.pincette.json.JsonUtil.getValue;
 import static net.pincette.json.JsonUtil.isObject;
@@ -15,52 +13,58 @@ import static net.pincette.json.JsonUtil.toNative;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.streams.Pipeline.HTTP;
 import static net.pincette.mongo.streams.Util.tryForever;
-import static net.pincette.netty.http.HttpClient.hasBody;
-import static net.pincette.netty.http.Util.setBody;
 import static net.pincette.rs.Async.mapAsync;
+import static net.pincette.rs.Box.box;
 import static net.pincette.rs.Chain.with;
 import static net.pincette.rs.Flatten.flatMap;
-import static net.pincette.rs.Mapper.map;
-import static net.pincette.rs.PassThrough.passThrough;
-import static net.pincette.rs.Pipe.pipe;
 import static net.pincette.rs.Reducer.reduce;
+import static net.pincette.rs.Util.asValueAsync;
 import static net.pincette.rs.Util.discard;
+import static net.pincette.rs.Util.empty;
+import static net.pincette.rs.Util.lines;
 import static net.pincette.rs.json.Util.parseJson;
-import static net.pincette.util.Builder.create;
+import static net.pincette.util.ImmutableBuilder.create;
 import static net.pincette.util.Pair.pair;
 import static net.pincette.util.Util.must;
 import static net.pincette.util.Util.tryToDoRethrow;
 import static net.pincette.util.Util.tryToGetRethrow;
+import static org.eclipse.jetty.http.HttpHeader.CONTENT_LENGTH;
+import static org.eclipse.jetty.http.HttpHeader.CONTENT_TYPE;
+import static org.eclipse.jetty.http.HttpHeader.TRANSFER_ENCODING;
+import static org.eclipse.jetty.reactive.client.ReactiveRequest.newBuilder;
+import static org.reactivestreams.FlowAdapters.toFlowPublisher;
+import static org.reactivestreams.FlowAdapters.toPublisher;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.handler.codec.http.DefaultFullHttpRequest;
-import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.HttpResponse;
-import io.netty.handler.ssl.SslContext;
 import java.io.FileInputStream;
 import java.nio.ByteBuffer;
 import java.security.KeyStore;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow.Processor;
 import java.util.concurrent.Flow.Publisher;
-import java.util.concurrent.Flow.Subscriber;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import javax.json.JsonArrayBuilder;
 import javax.json.JsonObject;
-import javax.json.JsonObjectBuilder;
-import javax.json.JsonStructure;
 import javax.json.JsonValue;
-import javax.net.ssl.KeyManagerFactory;
 import net.pincette.function.SideEffect;
 import net.pincette.json.JsonUtil;
-import net.pincette.netty.http.HttpClient;
 import net.pincette.rs.Source;
 import net.pincette.rs.streams.Message;
+import net.pincette.util.Pair;
+import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.client.HttpResponse;
+import org.eclipse.jetty.client.api.Request;
+import org.eclipse.jetty.client.api.Response;
+import org.eclipse.jetty.client.dynamic.HttpClientTransportDynamic;
+import org.eclipse.jetty.client.util.StringRequestContent;
+import org.eclipse.jetty.http.HttpField;
+import org.eclipse.jetty.io.ClientConnector;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
+import org.eclipse.jetty.util.ssl.SslContextFactory.Client;
 
 /**
  * The $http operator.
@@ -80,6 +84,8 @@ class Http {
   private static final String UNWIND = "unwind";
   private static final String URL = "url";
 
+  private static final Map<JsonValue, HttpClient> clients = new HashMap<>();
+
   private Http() {}
 
   private static JsonObject addBody(
@@ -89,102 +95,138 @@ class Http {
 
   private static Publisher<Message<String, JsonObject>> addError(
       final Message<String, JsonObject> message,
-      final HttpResponse response,
-      final Publisher<ByteBuf> responseBody) {
-    final JsonObjectBuilder error =
-        createObjectBuilder().add(STATUS_CODE, response.status().code());
-    final JsonObjectBuilder newValue = createObjectBuilder(message.value);
-
-    return getResponseBody(response, responseBody)
-        .map(
-            publisher ->
-                with(Source.of(message))
-                    .mapAsync(m -> reduceResponseBody(publisher).thenApply(body -> pair(m, body)))
-                    .map(
-                        pair ->
-                            pair.first.withValue(
-                                newValue.add(HTTP_ERROR, error.add(BODY, pair.second)).build()))
-                    .get())
-        .orElseGet(() -> Source.of(message.withValue(newValue.add(HTTP_ERROR, error).build())));
+      final Response response,
+      final Publisher<ByteBuffer> responseBody) {
+    return with(Source.of(message))
+        .mapAsync(
+            m ->
+                errorBody(response, responseBody)
+                    .thenApply(body -> m.withValue(addError(m.value, response.getStatus(), body))))
+        .get();
   }
 
-  private static FullHttpRequest createRequest(
+  private static JsonObject addError(
+      final JsonObject value, final int statusCode, final JsonValue body) {
+    return createObjectBuilder(value)
+        .add(HTTP_ERROR, createObjectBuilder().add(STATUS_CODE, statusCode).add(BODY, body))
+        .build();
+  }
+
+  private static Optional<Request.Content> body(
+      final JsonObject value, final Function<JsonObject, JsonValue> body) {
+    return ofNullable(body)
+        .map(b -> b.apply(value))
+        .filter(JsonUtil::isStructure)
+        .map(v -> new StringRequestContent("application/json", string(v)));
+  }
+
+  private static ClientConnector clientConnector(final SslContextFactory.Client sslContextFactory) {
+    final ClientConnector connector = new ClientConnector();
+
+    connector.setSslContextFactory(sslContextFactory);
+
+    return connector;
+  }
+
+  private static JsonValue clientKey(final JsonObject expression) {
+    return ofNullable(expression.getJsonObject(SSL_CONTEXT))
+        .map(JsonValue.class::cast)
+        .orElse(NULL);
+  }
+
+  private static Optional<Request> createRequest(
+      final HttpClient client,
       final JsonObject value,
       final Function<JsonObject, JsonValue> url,
       final Function<JsonObject, JsonValue> method,
       final Function<JsonObject, JsonValue> headers,
       final Function<JsonObject, JsonValue> body) {
-    final String m = stringValue(method.apply(value)).orElse(null);
-    final String u = stringValue(url.apply(value)).orElse(null);
-
-    return u != null && m != null
-        ? create(() -> new DefaultFullHttpRequest(HTTP_1_1, HttpMethod.valueOf(m), u))
-            .updateIf(
-                () ->
-                    ofNullable(headers)
-                        .map(h -> h.apply(value))
-                        .filter(JsonUtil::isObject)
-                        .map(JsonValue::asJsonObject),
-                Http::setHeaders)
-            .updateIf(
-                () -> ofNullable(body).map(b -> b.apply(value)).filter(JsonUtil::isStructure),
-                Http::setJsonBody)
-            .build()
-        : null;
-  }
-
-  private static SslContext createSslContext(final JsonObject sslContext) {
-    return tryToGetRethrow(
-            () ->
-                forClient()
-                    .keyManager(
-                        getKeyManagerFactory(
-                            getKeyStore(
-                                sslContext.getString(KEY_STORE), sslContext.getString(PASSWORD)),
-                            sslContext.getString(PASSWORD)))
-                    .build())
-        .orElse(null);
-  }
-
-  private static CompletionStage<HttpResponse> execute(
-      final HttpClient client,
-      final FullHttpRequest request,
-      final Subscriber<? super ByteBuf> responseBody,
-      final Context context) {
-    return tryForever(() -> client.request(request, responseBody), HTTP, context);
-  }
-
-  private static BiFunction<JsonObject, Subscriber<ByteBuf>, CompletionStage<HttpResponse>> execute(
-      final HttpClient client,
-      final Function<JsonObject, JsonValue> url,
-      final Function<JsonObject, JsonValue> method,
-      final Function<JsonObject, JsonValue> headers,
-      final Function<JsonObject, JsonValue> requestBody,
-      final Context context) {
-    return (json, responseBody) ->
-        execute(
-            client, createRequest(json, url, method, headers, requestBody), responseBody, context);
-  }
-
-  private static HttpClient getClient(final JsonObject sslContext) {
-    return create(HttpClient::new)
-        .update(b -> b.withFollowRedirects(true))
-        .updateIf(b -> sslContext != null, b -> b.withSslContext(createSslContext(sslContext)))
-        .build();
-  }
-
-  private static KeyManagerFactory getKeyManagerFactory(
-      final KeyStore keyStore, final String password) {
-    return tryToGetRethrow(() -> KeyManagerFactory.getInstance(getDefaultAlgorithm()))
+    return stringValue(url.apply(value))
+        .flatMap(u -> stringValue(method.apply(value)).map(m -> pair(u, m)))
         .map(
-            factory ->
-                SideEffect.<KeyManagerFactory>run(
-                        () -> tryToDoRethrow(() -> factory.init(keyStore, password.toCharArray())))
-                    .andThenGet(() -> factory))
-        .orElse(null);
+            pair ->
+                create(() -> client.newRequest(pair.first).method(pair.second))
+                    .updateIf(() -> headers(value, headers), Http::setHeaders)
+                    .updateIf(() -> body(value, body), Request::body)
+                    .build());
   }
 
-  private static KeyStore getKeyStore(final String keyStore, final String password) {
+  private static Optional<SslContextFactory.Client> createSslContextFactory(
+      final JsonObject sslContext) {
+    return getKeyStore(sslContext.getString(KEY_STORE), sslContext.getString(PASSWORD))
+        .map(Http::createSslContextFactory);
+  }
+
+  private static SslContextFactory.Client createSslContextFactory(final KeyStore keyStore) {
+    final Client client = new Client();
+
+    client.setKeyStore(keyStore);
+
+    return client;
+  }
+
+  private static CompletionStage<JsonValue> errorBody(
+      final Response response, final Publisher<ByteBuffer> body) {
+    return Optional.of(response)
+        .filter(Http::isJson)
+        .map(r -> reduceResponseBodyJson(responseBodyPublisher(body)))
+        .orElseGet(() -> isText(response) ? reduceResponseBodyText(body) : completedFuture(NULL));
+  }
+
+  private static CompletionStage<Pair<Response, Publisher<ByteBuffer>>> execute(
+      final Request request, final Context context) {
+    return tryForever(
+        () ->
+            asValueAsync(
+                toFlowPublisher(
+                    newBuilder(request)
+                        .build()
+                        .response(
+                            (r, p) ->
+                                toPublisher(
+                                    Source.of(
+                                        pair(
+                                            r.getResponse(),
+                                            with(toFlowPublisher(p)).map(c -> c.buffer).get())))))),
+        HTTP,
+        request.getURI().toString(),
+        context);
+  }
+
+  private static Function<JsonObject, CompletionStage<Pair<Response, Publisher<ByteBuffer>>>>
+      execute(
+          final HttpClient client,
+          final Function<JsonObject, JsonValue> url,
+          final Function<JsonObject, JsonValue> method,
+          final Function<JsonObject, JsonValue> headers,
+          final Function<JsonObject, JsonValue> requestBody,
+          final Context context) {
+    return json ->
+        createRequest(client, json, url, method, headers, requestBody)
+            .map(request -> execute(request, context))
+            .orElseGet(
+                () -> completedFuture(pair(new HttpResponse(null, null).status(400), empty())));
+  }
+
+  private static HttpClient getClient(final JsonObject expression) {
+    return clients.computeIfAbsent(
+        clientKey(expression),
+        k -> {
+          final HttpClient client =
+              ofNullable(expression.getJsonObject(SSL_CONTEXT))
+                  .flatMap(Http::createSslContextFactory)
+                  .map(Http::clientConnector)
+                  .map(connector -> new HttpClient(new HttpClientTransportDynamic(connector)))
+                  .orElseGet(HttpClient::new);
+
+          client.setFollowRedirects(true);
+          tryToDoRethrow(client::start);
+
+          return client;
+        });
+  }
+
+  private static Optional<KeyStore> getKeyStore(final String keyStore, final String password) {
     return tryToGetRethrow(() -> KeyStore.getInstance("pkcs12"))
         .map(
             store ->
@@ -194,15 +236,14 @@ class Http {
                                 () ->
                                     store.load(
                                         new FileInputStream(keyStore), password.toCharArray())))
-                    .andThenGet(() -> store))
-        .orElse(null);
+                    .andThenGet(() -> store));
   }
 
   private static Optional<Publisher<JsonObject>> getResponseBody(
-      final HttpResponse response, final Publisher<ByteBuf> responseBody) {
+      final Response response, final Publisher<ByteBuffer> responseBody) {
     final Optional<Publisher<JsonObject>> result =
         Optional.of(response)
-            .filter(HttpClient::hasBody)
+            .filter(Http::hasBody)
             .filter(Http::isJson)
             .map(r -> responseBodyPublisher(responseBody));
 
@@ -213,47 +254,76 @@ class Http {
     return result;
   }
 
-  private static boolean isJson(final HttpResponse response) {
-    return Optional.ofNullable(response.headers().get(CONTENT_TYPE))
-        .filter(type -> type.startsWith("application/json"))
+  private static boolean hasBody(final Response response) {
+    return ofNullable(response.getHeaders().getField(CONTENT_LENGTH))
+            .map(HttpField::getIntValue)
+            .filter(l -> l > 0)
+            .isPresent()
+        || ofNullable(response.getHeaders().getField(TRANSFER_ENCODING)).isPresent();
+  }
+
+  private static Optional<JsonObject> headers(
+      final JsonObject value, final Function<JsonObject, JsonValue> headers) {
+    return ofNullable(headers)
+        .map(h -> h.apply(value))
+        .filter(JsonUtil::isObject)
+        .map(JsonValue::asJsonObject);
+  }
+
+  private static boolean isJson(final Response response) {
+    return isType(response, "application/json");
+  }
+
+  private static boolean isText(final Response response) {
+    return isType(response, "text/plain");
+  }
+
+  private static boolean isType(final Response response, final String contentType) {
+    return Optional.ofNullable(response.getHeaders().getField(CONTENT_TYPE))
+        .map(HttpField::getValue)
+        .filter(type -> type.startsWith(contentType))
         .isPresent();
   }
 
-  private static boolean ok(final HttpResponse response) {
-    return response.status().code() < 300;
+  private static boolean ok(final Response response) {
+    return response.getStatus() < 300;
   }
 
-  private static CompletionStage<JsonStructure> reduceResponseBody(
+  private static CompletionStage<JsonValue> reduceResponseBodyJson(
       final Publisher<JsonObject> responseBody) {
     return reduce(responseBody, JsonUtil::createArrayBuilder, JsonArrayBuilder::add)
         .thenApply(JsonArrayBuilder::build)
         .thenApply(array -> array.size() == 1 ? array.get(0).asJsonObject() : array);
   }
 
+  private static CompletionStage<JsonValue> reduceResponseBodyText(
+      final Publisher<ByteBuffer> responseBody) {
+    return reduce(with(responseBody).map(lines()).get(), StringBuilder::new, StringBuilder::append)
+        .thenApply(StringBuilder::toString)
+        .thenApply(JsonUtil::createValue);
+  }
+
   private static Publisher<JsonObject> responseBodyPublisher(
-      final Publisher<ByteBuf> responseBody) {
+      final Publisher<ByteBuffer> responseBody) {
     return with(responseBody)
-        .map(Http::toNioBuffer)
         .map(parseJson())
         .filter(JsonUtil::isObject)
         .map(JsonValue::asJsonObject)
         .get();
   }
 
-  private static void setJsonBody(final FullHttpRequest request, final JsonValue body) {
-    setBody(request, "application/json", string(body));
-  }
-
-  private static void setHeaders(final FullHttpRequest request, final JsonObject headers) {
-    toNative(headers)
-        .forEach(
-            (k, v) -> {
-              if (v instanceof List) {
-                request.headers().add(k, (List<?>) v);
-              } else {
-                request.headers().add(k, v);
-              }
-            });
+  private static Request setHeaders(final Request request, final JsonObject headers) {
+    return request.headers(
+        h ->
+            toNative(headers)
+                .forEach(
+                    (k, v) -> {
+                      if (v instanceof List) {
+                        h.put(k, (List<String>) v);
+                      } else {
+                        h.put(k, (String) v);
+                      }
+                    }));
   }
 
   static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
@@ -265,8 +335,8 @@ class Http {
     must(expr.containsKey(METHOD) && expr.containsKey(URL));
 
     final String as = expr.getString(AS, null);
-    final HttpClient client = getClient(expr.getJsonObject(SSL_CONTEXT));
-    final BiFunction<JsonObject, Subscriber<ByteBuf>, CompletionStage<HttpResponse>> execute =
+    final HttpClient client = getClient(expr);
+    final Function<JsonObject, CompletionStage<Pair<Response, Publisher<ByteBuffer>>>> execute =
         execute(
             client,
             function(expr.getValue("/" + URL), context.features),
@@ -275,36 +345,22 @@ class Http {
             getValue(expr, "/" + BODY).map(b -> function(b, context.features)).orElse(null),
             context);
 
-    return pipe(map(WithNewResponseBody::withNewResponseBody))
-        .then(
-            mapAsync(
-                message ->
-                    execute
-                        .apply(message.message.value, message.responseBody)
-                        .thenApply(response -> pair(message, response))))
-        .then(
-            flatMap(
-                pair ->
-                    transform(
-                        pair.first.message,
-                        pair.second,
-                        pair.first.responseBody,
-                        as,
-                        expr.getBoolean(UNWIND, false))));
-  }
-
-  private static ByteBuffer toNioBuffer(final ByteBuf buffer) {
-    final byte[] bytes = new byte[buffer.readableBytes()];
-
-    buffer.readBytes(bytes);
-
-    return wrap(bytes);
+    return box(
+        mapAsync(message -> execute.apply(message.value).thenApply(pair -> pair(message, pair))),
+        flatMap(
+            pair ->
+                transform(
+                    pair.first,
+                    pair.second.first,
+                    pair.second.second,
+                    as,
+                    expr.getBoolean(UNWIND, false))));
   }
 
   private static Publisher<Message<String, JsonObject>> transform(
       final Message<String, JsonObject> message,
-      final HttpResponse response,
-      final Publisher<ByteBuf> responseBody,
+      final Response response,
+      final Publisher<ByteBuffer> responseBody,
       final String as,
       final boolean unwind) {
     final Supplier<Publisher<Message<String, JsonObject>>> tryWithBody =
@@ -326,7 +382,7 @@ class Http {
   }
 
   private static Publisher<Message<String, JsonObject>> withoutResponseBody(
-      final Message<String, JsonObject> message, final Publisher<ByteBuf> responseBody) {
+      final Message<String, JsonObject> message, final Publisher<ByteBuffer> responseBody) {
     discard(responseBody);
 
     return Source.of(message);
@@ -339,15 +395,15 @@ class Http {
     return with(Source.of(message))
         .mapAsync(
             m ->
-                reduceResponseBody(responseBody)
+                reduceResponseBodyJson(responseBody)
                     .thenApply(body -> m.withValue(addBody(m.value, body, as))))
         .get();
   }
 
   private static Publisher<Message<String, JsonObject>> withResponseBody(
       final Message<String, JsonObject> message,
-      final HttpResponse response,
-      final Publisher<ByteBuf> responseBody,
+      final Response response,
+      final Publisher<ByteBuffer> responseBody,
       final String as,
       final boolean unwind) {
     return getResponseBody(response, responseBody)
@@ -357,20 +413,5 @@ class Http {
                     ? unwindResponseBody(message, body, as)
                     : withReducedResponseBody(message, body, as))
         .orElseGet(() -> Source.of(message));
-  }
-
-  private static class WithNewResponseBody {
-    private final Message<String, JsonObject> message;
-    private final Processor<ByteBuf, ByteBuf> responseBody;
-
-    private WithNewResponseBody(
-        final Message<String, JsonObject> message, final Processor<ByteBuf, ByteBuf> responseBody) {
-      this.message = message;
-      this.responseBody = responseBody;
-    }
-
-    static WithNewResponseBody withNewResponseBody(final Message<String, JsonObject> message) {
-      return new WithNewResponseBody(message, passThrough());
-    }
   }
 }
