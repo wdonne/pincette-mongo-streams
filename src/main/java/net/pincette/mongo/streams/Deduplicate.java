@@ -4,7 +4,10 @@ import static com.mongodb.client.model.Filters.eq;
 import static java.time.Duration.ofMillis;
 import static java.time.Instant.now;
 import static net.pincette.json.JsonUtil.isObject;
+import static net.pincette.json.JsonUtil.string;
+import static net.pincette.mongo.BsonUtil.fromBson;
 import static net.pincette.mongo.BsonUtil.fromJson;
+import static net.pincette.mongo.BsonUtil.toBsonDocument;
 import static net.pincette.mongo.BsonUtil.toDocument;
 import static net.pincette.mongo.Collection.findOne;
 import static net.pincette.mongo.Collection.insertOne;
@@ -54,6 +57,11 @@ class Deduplicate {
     return tryForever(
         () -> findOne(collection, filter, BsonDocument.class, null).thenApply(Optional::isPresent),
         DEDUPLICATE,
+        () ->
+            "Collection "
+                + collection
+                + ", findOne with filter: "
+                + string(fromBson(toBsonDocument(filter))),
         context);
   }
 
@@ -70,6 +78,7 @@ class Deduplicate {
                 .thenApply(result -> must(result, InsertOneResult::wasAcknowledged))
                 .thenApply(result -> true),
         DEDUPLICATE,
+        () -> "Collection " + collection + ", save: " + string(fromBson(value)),
         context);
   }
 

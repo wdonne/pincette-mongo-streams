@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Supplier;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonString;
@@ -59,7 +60,15 @@ class Util {
   }
 
   static void exceptionLogger(final Throwable t, final String stage, final Context context) {
-    exceptionLogger(t, stage, null, context);
+    exceptionLogger(t, stage, (String) null, context);
+  }
+
+  static void exceptionLogger(
+      final Throwable t,
+      final String stage,
+      final Supplier<String> message,
+      final Context context) {
+    exceptionLogger(t, stage, message.get(), context);
   }
 
   static void exceptionLogger(
@@ -122,7 +131,7 @@ class Util {
   static <T> CompletionStage<T> tryForever(
       final SupplierWithException<CompletionStage<T>> run,
       final String stage,
-      final String message,
+      final Supplier<String> message,
       final Context context) {
     return tryToGetForever(run, RETRY, e -> exceptionLogger(e, stage, message, context));
   }

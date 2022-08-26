@@ -1,10 +1,12 @@
 package net.pincette.mongo.streams;
 
+import static java.time.Duration.ofSeconds;
 import static java.util.stream.Collectors.toList;
 import static net.pincette.json.JsonUtil.createReader;
 import static net.pincette.json.JsonUtil.objects;
 import static net.pincette.netty.http.TestUtil.resourceHandler;
 import static net.pincette.rs.streams.Message.message;
+import static net.pincette.util.ScheduledCompletionStage.runAsyncAfter;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
@@ -65,6 +67,14 @@ class TestHttp extends Base {
   @Test
   @DisplayName("$http 5")
   void http5() {
+    runHttpTest("http5");
+  }
+
+  @Test
+  @DisplayName("$http 5 recover")
+  void http5Recover() {
+    stopServer();
+    runAsyncAfter(this::startServer, ofSeconds(20));
     runHttpTest("http5");
   }
 

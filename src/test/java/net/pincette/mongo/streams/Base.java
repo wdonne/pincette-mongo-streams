@@ -3,6 +3,7 @@ package net.pincette.mongo.streams;
 import static java.util.Optional.ofNullable;
 import static java.util.UUID.randomUUID;
 import static java.util.concurrent.CompletableFuture.completedFuture;
+import static java.util.logging.Logger.getGlobal;
 import static java.util.stream.Collectors.toList;
 import static net.pincette.mongo.streams.Pipeline.create;
 import static net.pincette.rs.Chain.with;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow.Processor;
 import java.util.function.BiFunction;
+import java.util.logging.Logger;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
 import net.pincette.rs.Source;
@@ -78,6 +80,7 @@ public class Base {
             new Context()
                 .withApp(APP)
                 .withDatabase(resources.database)
+                .withLogger(getGlobal())
                 .withStageExtensions(map(pair("$wait", (expr, ctx) -> Wait.stage(expr))))
                 .withProducer(producer != null ? producer : (t, m) -> completedFuture(true)));
 

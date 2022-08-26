@@ -3,6 +3,7 @@ package net.pincette.mongo.streams;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static net.pincette.json.JsonUtil.asString;
 import static net.pincette.json.JsonUtil.isObject;
+import static net.pincette.json.JsonUtil.string;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.streams.Pipeline.SEND;
 import static net.pincette.mongo.streams.Util.tryForever;
@@ -54,6 +55,7 @@ class Send {
                                         .apply(asString(t).getString(), m)
                                         .thenApply(result -> m.withValue(null)),
                                 SEND,
+                                () -> "Topic " + t + ", send: " + string(m.value),
                                 context))
                     .orElseGet(() -> completedFuture(m))),
         filter(m -> m.value != null));

@@ -12,6 +12,7 @@ import static net.pincette.json.JsonUtil.createObjectBuilder;
 import static net.pincette.json.JsonUtil.createValue;
 import static net.pincette.json.JsonUtil.isArray;
 import static net.pincette.json.JsonUtil.isObject;
+import static net.pincette.json.JsonUtil.string;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.Expression.replaceVariables;
 import static net.pincette.mongo.JsonClient.aggregate;
@@ -83,6 +84,7 @@ class Lookup {
                         list.stream()
                             .reduce(createArrayBuilder(), JsonArrayBuilder::add, (b1, b2) -> b1)),
         LOOKUP,
+        () -> "Collection " + collection + ", lookup: " + string(query),
         context);
   }
 

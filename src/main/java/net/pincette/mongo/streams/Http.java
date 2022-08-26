@@ -1,6 +1,5 @@
 package net.pincette.mongo.streams;
 
-import static java.lang.Long.MAX_VALUE;
 import static java.util.Optional.ofNullable;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static javax.json.JsonValue.NULL;
@@ -55,6 +54,7 @@ import net.pincette.json.JsonUtil;
 import net.pincette.rs.Source;
 import net.pincette.rs.streams.Message;
 import net.pincette.util.Pair;
+import net.pincette.util.State;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.HttpResponse;
 import org.eclipse.jetty.client.api.Request;
@@ -63,6 +63,8 @@ import org.eclipse.jetty.client.dynamic.HttpClientTransportDynamic;
 import org.eclipse.jetty.client.util.StringRequestContent;
 import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.io.ClientConnector;
+import org.eclipse.jetty.reactive.client.ContentChunk;
+import org.eclipse.jetty.reactive.client.ReactiveResponse;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.ssl.SslContextFactory.Client;
 
@@ -174,22 +176,26 @@ class Http {
   }
 
   private static CompletionStage<Pair<Response, Publisher<ByteBuffer>>> execute(
-      final Request request, final Context context) {
+      final Supplier<Optional<Request>> request, final Context context) {
+    final State<String> message = new State<>();
+
     return tryForever(
         () ->
-            asValueAsync(
-                toFlowPublisher(
-                    newBuilder(request)
-                        .build()
-                        .response(
-                            (r, p) ->
-                                toPublisher(
-                                    Source.of(
-                                        pair(
-                                            r.getResponse(),
-                                            with(toFlowPublisher(p)).map(c -> c.buffer).get())))))),
+            request
+                .get()
+                .map(
+                    r ->
+                        SideEffect.<CompletionStage<Pair<Response, Publisher<ByteBuffer>>>>run(
+                                () -> message.set(r.getMethod() + " of " + r.getURI()))
+                            .andThenGet(
+                                () ->
+                                    asValueAsync(
+                                        toFlowPublisher(
+                                            newBuilder(r).build().response(Http::response)))))
+                .orElseGet(
+                    () -> completedFuture(pair(new HttpResponse(null, null).status(400), empty()))),
         HTTP,
-        request.getURI().toString(),
+        message::get,
         context);
   }
 
@@ -202,10 +208,7 @@ class Http {
           final Function<JsonObject, JsonValue> requestBody,
           final Context context) {
     return json ->
-        createRequest(client, json, url, method, headers, requestBody)
-            .map(request -> execute(request, context))
-            .orElseGet(
-                () -> completedFuture(pair(new HttpResponse(null, null).status(400), empty())));
+        execute(() -> createRequest(client, json, url, method, headers, requestBody), context);
   }
 
   private static HttpClient getClient(final JsonObject expression) {
@@ -301,6 +304,13 @@ class Http {
     return reduce(with(responseBody).map(lines()).get(), StringBuilder::new, StringBuilder::append)
         .thenApply(StringBuilder::toString)
         .thenApply(JsonUtil::createValue);
+  }
+
+  private static org.reactivestreams.Publisher<Pair<Response, Publisher<ByteBuffer>>> response(
+      final ReactiveResponse response, final org.reactivestreams.Publisher<ContentChunk> body) {
+    return toPublisher(
+        Source.of(
+            pair(response.getResponse(), with(toFlowPublisher(body)).map(c -> c.buffer).get())));
   }
 
   private static Publisher<JsonObject> responseBodyPublisher(
