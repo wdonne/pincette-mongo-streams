@@ -1,21 +1,25 @@
 package net.pincette.mongo.streams;
 
 import static com.mongodb.client.model.Filters.eq;
+import static com.mongodb.client.model.Updates.combine;
+import static com.mongodb.client.model.Updates.set;
 import static java.time.Duration.ofMillis;
 import static java.time.Instant.now;
+import static java.util.stream.Collectors.toList;
+import static net.pincette.json.JsonUtil.from;
 import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.json.JsonUtil.string;
 import static net.pincette.mongo.BsonUtil.fromBson;
 import static net.pincette.mongo.BsonUtil.fromJson;
 import static net.pincette.mongo.BsonUtil.toBsonDocument;
-import static net.pincette.mongo.BsonUtil.toDocument;
+import static net.pincette.mongo.Collection.bulkWrite;
 import static net.pincette.mongo.Collection.findOne;
-import static net.pincette.mongo.Collection.insertOne;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.streams.Pipeline.DEDUPLICATE;
 import static net.pincette.mongo.streams.Util.ID;
 import static net.pincette.mongo.streams.Util.tryForever;
 import static net.pincette.rs.Async.mapAsync;
+import static net.pincette.rs.Commit.commit;
 import static net.pincette.rs.Filter.filter;
 import static net.pincette.rs.Mapper.map;
 import static net.pincette.rs.Pipe.pipe;
@@ -23,15 +27,22 @@ import static net.pincette.rs.Util.duplicateFilter;
 import static net.pincette.util.Pair.pair;
 import static net.pincette.util.Util.must;
 
-import com.mongodb.client.result.InsertOneResult;
+import com.mongodb.bulk.BulkWriteResult;
+import com.mongodb.client.model.UpdateOneModel;
+import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.reactivestreams.client.MongoCollection;
+import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow.Processor;
 import java.util.function.Function;
+import java.util.stream.Stream;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
+import net.pincette.mongo.BsonUtil;
 import net.pincette.rs.streams.Message;
+import net.pincette.util.Pair;
 import org.bson.BsonDocument;
 import org.bson.BsonInt64;
 import org.bson.BsonValue;
@@ -66,20 +77,36 @@ class Deduplicate {
   }
 
   private static CompletionStage<Boolean> save(
-      final MongoCollection<Document> collection, final BsonValue value, final Context context) {
+      final MongoCollection<Document> collection,
+      final List<BsonValue> values,
+      final Context context) {
     return tryForever(
         () ->
-            insertOne(
+            bulkWrite(
                     collection,
-                    toDocument(
-                        new BsonDocument()
-                            .append(ID, value)
-                            .append(TIMESTAMP, new BsonInt64(now().toEpochMilli()))))
-                .thenApply(result -> must(result, InsertOneResult::wasAcknowledged))
+                    values.stream()
+                        .map(
+                            value ->
+                                new UpdateOneModel<Document>(
+                                    eq(ID, value),
+                                    combine(
+                                        set(ID, value),
+                                        set(TIMESTAMP, new BsonInt64(now().toEpochMilli()))),
+                                    new UpdateOptions().upsert(true)))
+                        .collect(toList()))
+                .thenApply(result -> must(result, BulkWriteResult::wasAcknowledged))
                 .thenApply(result -> true),
         DEDUPLICATE,
-        () -> "Collection " + collection + ", save: " + string(fromBson(value)),
+        () ->
+            "Collection "
+                + collection
+                + ", save: "
+                + string(from(values.stream().map(BsonUtil::fromBson))),
         context);
+  }
+
+  private static <T, U> Stream<U> second(final List<Pair<T, U>> pairs) {
+    return pairs.stream().map(pair -> pair.second);
   }
 
   static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
@@ -87,13 +114,15 @@ class Deduplicate {
     must(isObject(expression));
 
     final JsonObject expr = expression.asJsonObject();
+
+    must(expr.containsKey(COLLECTION));
+
+    final Duration cacheWindow = ofMillis(expr.getInt(CACHE_WINDOW, 60000));
     final MongoCollection<Document> collection =
         context.database.getCollection(expr.getString(COLLECTION));
     final Function<JsonObject, JsonValue> fn = function(expr.get(EXPRESSION), context.features);
 
-    return pipe(duplicateFilter(
-            (Message<String, JsonObject> m) -> fn.apply(m.value),
-            ofMillis(expr.getInt(CACHE_WINDOW, 60000))))
+    return pipe(duplicateFilter((Message<String, JsonObject> m) -> fn.apply(m.value), cacheWindow))
         .then(map(m -> pair(m, fromJson(fn.apply(m.value)))))
         .then(
             mapAsync(
@@ -102,8 +131,7 @@ class Deduplicate {
                         .thenApply(result -> pair(pair, result))))
         .then(filter(pair -> !pair.second))
         .then(map(pair -> pair.first))
-        .then(
-            mapAsync(
-                pair -> save(collection, pair.second, context).thenApply(result -> pair.first)));
+        .then(commit(list -> save(collection, second(list).collect(toList()), context)))
+        .then(map(pair -> pair.first));
   }
 }

@@ -11,6 +11,7 @@ import static net.pincette.json.JsonUtil.asInt;
 import static net.pincette.json.JsonUtil.createValue;
 import static net.pincette.json.JsonUtil.isInt;
 import static net.pincette.json.JsonUtil.isObject;
+import static net.pincette.json.JsonUtil.objectValue;
 import static net.pincette.json.JsonUtil.toJsonPointer;
 import static net.pincette.json.Transform.transform;
 import static net.pincette.mongo.Expression.function;
@@ -30,7 +31,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
-import net.pincette.json.JsonUtil;
 import net.pincette.json.Transform.JsonEntry;
 import net.pincette.json.Transform.Transformer;
 import net.pincette.mongo.Features;
@@ -61,9 +61,7 @@ class Project {
 
   private static Optional<String> field(
       final String key, final JsonValue value, final Predicate<JsonValue> predicate) {
-    return Optional.of(value)
-        .filter(JsonUtil::isObject)
-        .map(JsonValue::asJsonObject)
+    return objectValue(value)
         .filter(j -> j.keySet().size() == 1)
         .map(j -> j.entrySet().iterator().next())
         .map(e -> field(key + "." + e.getKey(), e.getValue(), predicate))

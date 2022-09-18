@@ -41,6 +41,9 @@ import net.pincette.util.State;
  *       operators, so their constraints apply here. The extension field <code>_collection</code> is
  *       also available.
  *   <dt><a href="https://docs.mongodb.com/manual/reference/operator/aggregation/count/">$count</a>
+ *   <dt>$backTrace
+ *   <dd>This is a debugging aid. It logs the number of backpressure requested. To distinguish
+ *       between trace spots, you can set the optional field <code>name</code>.
  *   <dt>$delay
  *   <dd>With this extension operator you can send a messages to a Kafka topic with a delay. The
  *       order of the messages is not guaranteed. The operator is an object with two fields. The
@@ -127,6 +130,12 @@ import net.pincette.util.State;
  *         "whenMatched": "replace",
  *         "whenNotMatched": "insert"
  *       }</pre>
+ *   <dt>$per
+ *   <dd>This extension operator is an object with the mandatory fields <code>amount</code> and
+ *       <code>as</code>. It accumulates the amount of messages and produces a message with only the
+ *       field denoted by the <code>as</code> field. The field is an array of messages. With the
+ *       optional <code>timeout</code> field, which is a number of milliseconds, a batch of messages
+ *       can be emitted before it is full. In that case the length of the generated array will vary.
  *   <dt>$probe
  *   <dd>With this extension operator you can monitor the throughput anywhere in a pipeline. The
  *       specification is an object with the fields <code>name</code> and <code>topic</code>, which
@@ -183,6 +192,7 @@ import net.pincette.util.State;
  */
 public class Pipeline {
   static final String ADD_FIELDS = "$addFields";
+  static final String BACK_TRACE = "$backTrace";
   static final String BUCKET = "$bucket";
   static final String COUNT = "$count";
   static final String DEDUPLICATE = "$deduplicate";
@@ -195,6 +205,7 @@ public class Pipeline {
   static final String MATCH = "$match";
   static final String MERGE = "$merge";
   static final String OUT = "$out";
+  static final String PER = "$per";
   static final String PROBE = "$probe";
   static final String PROJECT = "$project";
   static final String REDACT = "$redact";
@@ -211,6 +222,7 @@ public class Pipeline {
   private static final Map<String, Stage> stages =
       map(
           pair(ADD_FIELDS, AddFields::stage),
+          pair(BACK_TRACE, (ex, ctx) -> BackTrace.stage(ex)),
           pair(BUCKET, Bucket::stage),
           pair(COUNT, Count::stage),
           pair(DEDUPLICATE, Deduplicate::stage),
@@ -223,6 +235,7 @@ public class Pipeline {
           pair(MATCH, Match::stage),
           pair(MERGE, Merge::stage),
           pair(OUT, Out::stage),
+          pair(PER, (ex, ctx) -> Per.stage(ex)),
           pair(PROBE, Probe::stage),
           pair(PROJECT, Project::stage),
           pair(REDACT, Redact::stage),

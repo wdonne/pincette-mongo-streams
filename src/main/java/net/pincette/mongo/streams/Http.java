@@ -102,7 +102,7 @@ class Http {
     return with(Source.of(message))
         .mapAsync(
             m ->
-                errorBody(response, responseBody)
+                reducedResponseBody(response, responseBody)
                     .thenApply(body -> m.withValue(addError(m.value, response.getStatus(), body))))
         .get();
   }
@@ -112,6 +112,24 @@ class Http {
     return createObjectBuilder(value)
         .add(HTTP_ERROR, createObjectBuilder().add(STATUS_CODE, statusCode).add(BODY, body))
         .build();
+  }
+
+  private static CompletionStage<JsonObject> addResponseBody(
+      final JsonObject value,
+      final Response response,
+      final Publisher<ByteBuffer> responseBody,
+      final String as) {
+    return reducedResponseBody(response, responseBody)
+        .thenApply(
+            b ->
+                ok(response)
+                    ? addResponseBody(value, b, as)
+                    : addError(value, response.getStatus(), b));
+  }
+
+  private static JsonObject addResponseBody(
+      final JsonObject value, final JsonValue body, final String as) {
+    return as != null ? createObjectBuilder(value).add(as, body).build() : value;
   }
 
   private static Optional<Request.Content> body(
@@ -165,14 +183,6 @@ class Http {
     client.setKeyStore(keyStore);
 
     return client;
-  }
-
-  private static CompletionStage<JsonValue> errorBody(
-      final Response response, final Publisher<ByteBuffer> body) {
-    return Optional.of(response)
-        .filter(Http::isJson)
-        .map(r -> reduceResponseBodyJson(responseBodyPublisher(body)))
-        .orElseGet(() -> isText(response) ? reduceResponseBodyText(body) : completedFuture(NULL));
   }
 
   private static CompletionStage<Pair<Response, Publisher<ByteBuffer>>> execute(
@@ -292,6 +302,18 @@ class Http {
     return response.getStatus() < 300;
   }
 
+  private static CompletionStage<JsonValue> reducedResponseBody(
+      final Response response, final Publisher<ByteBuffer> body) {
+    return Optional.of(response)
+        .filter(Http::isJson)
+        .map(r -> reduceResponseBodyJson(responseBodyPublisher(body)))
+        .orElseGet(
+            () ->
+                isText(response)
+                    ? reduceResponseBodyText(body)
+                    : completedFuture(withoutResponseBody(body)));
+  }
+
   private static CompletionStage<JsonValue> reduceResponseBodyJson(
       final Publisher<JsonObject> responseBody) {
     return reduce(responseBody, JsonUtil::createArrayBuilder, JsonArrayBuilder::add)
@@ -355,29 +377,27 @@ class Http {
             getValue(expr, "/" + BODY).map(b -> function(b, context.features)).orElse(null),
             context);
 
-    return box(
-        mapAsync(message -> execute.apply(message.value).thenApply(pair -> pair(message, pair))),
-        flatMap(
-            pair ->
-                transform(
-                    pair.first,
-                    pair.second.first,
-                    pair.second.second,
-                    as,
-                    expr.getBoolean(UNWIND, false))));
+    return expr.getBoolean(UNWIND, false) && as != null
+        ? box(
+            mapAsync(
+                message -> execute.apply(message.value).thenApply(pair -> pair(message, pair))),
+            flatMap(pair -> transform(pair.first, pair.second.first, pair.second.second, as)))
+        : mapAsync(
+            message ->
+                execute
+                    .apply(message.value)
+                    .thenComposeAsync(
+                        pair -> addResponseBody(message.value, pair.first, pair.second, as))
+                    .thenApply(message::withValue));
   }
 
   private static Publisher<Message<String, JsonObject>> transform(
       final Message<String, JsonObject> message,
       final Response response,
       final Publisher<ByteBuffer> responseBody,
-      final String as,
-      final boolean unwind) {
+      final String as) {
     final Supplier<Publisher<Message<String, JsonObject>>> tryWithBody =
-        () ->
-            as != null
-                ? withResponseBody(message, response, responseBody, as, unwind)
-                : withoutResponseBody(message, responseBody);
+        () -> withResponseBody(message, response, responseBody, as);
 
     return ok(response) ? tryWithBody.get() : addError(message, response, responseBody);
   }
@@ -391,37 +411,19 @@ class Http {
         .get();
   }
 
-  private static Publisher<Message<String, JsonObject>> withoutResponseBody(
-      final Message<String, JsonObject> message, final Publisher<ByteBuffer> responseBody) {
+  private static JsonValue withoutResponseBody(final Publisher<ByteBuffer> responseBody) {
     discard(responseBody);
 
-    return Source.of(message);
-  }
-
-  private static Publisher<Message<String, JsonObject>> withReducedResponseBody(
-      final Message<String, JsonObject> message,
-      final Publisher<JsonObject> responseBody,
-      final String as) {
-    return with(Source.of(message))
-        .mapAsync(
-            m ->
-                reduceResponseBodyJson(responseBody)
-                    .thenApply(body -> m.withValue(addBody(m.value, body, as))))
-        .get();
+    return NULL;
   }
 
   private static Publisher<Message<String, JsonObject>> withResponseBody(
       final Message<String, JsonObject> message,
       final Response response,
       final Publisher<ByteBuffer> responseBody,
-      final String as,
-      final boolean unwind) {
+      final String as) {
     return getResponseBody(response, responseBody)
-        .map(
-            body ->
-                unwind
-                    ? unwindResponseBody(message, body, as)
-                    : withReducedResponseBody(message, body, as))
+        .map(body -> unwindResponseBody(message, body, as))
         .orElseGet(() -> Source.of(message));
   }
 }

@@ -34,6 +34,7 @@ import static net.pincette.util.Pair.pair;
 import static net.pincette.util.Util.must;
 
 import com.mongodb.reactivestreams.client.MongoDatabase;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
@@ -171,8 +172,15 @@ class Lookup {
                         wrapArray(function(createValue("$" + field), features)))))
         .orElseGet(
             () ->
-                expression.getJsonObject(LET).entrySet().stream()
-                    .collect(toMap(e -> "$$" + e.getKey(), e -> function(e.getValue(), features))));
+                ofNullable(expression.getJsonObject(LET))
+                    .map(
+                        let ->
+                            let.entrySet().stream()
+                                .collect(
+                                    toMap(
+                                        e -> "$$" + e.getKey(),
+                                        e -> function(e.getValue(), features))))
+                    .orElseGet(Collections::emptyMap));
   }
 
   private static Function<JsonObject, JsonValue> wrapArray(

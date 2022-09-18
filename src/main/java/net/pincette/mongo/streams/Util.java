@@ -4,6 +4,7 @@ import static java.time.Duration.ofSeconds;
 import static java.util.Collections.emptySet;
 import static java.util.Optional.ofNullable;
 import static java.util.logging.Level.SEVERE;
+import static java.util.logging.Logger.getLogger;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static net.pincette.json.JsonUtil.asString;
@@ -23,6 +24,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
+import java.util.logging.Logger;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonString;
@@ -38,6 +40,8 @@ import net.pincette.util.Pair;
  */
 class Util {
   static final String ID = "_id";
+  static final Logger LOGGER = getLogger("net.pincette.mongo.streams");
+
   static final Duration RETRY = ofSeconds(5);
   private static final String AND = "$and";
   private static final String EQ = "$eq";
