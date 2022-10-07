@@ -4,6 +4,7 @@ import static java.util.Optional.ofNullable;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static javax.json.JsonValue.NULL;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
+import static net.pincette.json.JsonUtil.createValue;
 import static net.pincette.json.JsonUtil.getValue;
 import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.json.JsonUtil.string;
@@ -124,7 +125,8 @@ class Http {
             b ->
                 ok(response)
                     ? addResponseBody(value, b, as)
-                    : addError(value, response.getStatus(), b));
+                    : addError(value, response.getStatus(), b))
+        .exceptionally(e -> addError(value, response.getStatus(), createValue(e.getMessage())));
   }
 
   private static JsonObject addResponseBody(
