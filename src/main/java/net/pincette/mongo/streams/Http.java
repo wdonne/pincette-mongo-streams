@@ -4,7 +4,6 @@ import static java.util.Optional.ofNullable;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static javax.json.JsonValue.NULL;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
-import static net.pincette.json.JsonUtil.createValue;
 import static net.pincette.json.JsonUtil.getValue;
 import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.json.JsonUtil.string;
@@ -12,16 +11,19 @@ import static net.pincette.json.JsonUtil.stringValue;
 import static net.pincette.json.JsonUtil.toNative;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.streams.Pipeline.HTTP;
+import static net.pincette.mongo.streams.Util.RETRY;
+import static net.pincette.mongo.streams.Util.exceptionLogger;
 import static net.pincette.mongo.streams.Util.tryForever;
 import static net.pincette.rs.Async.mapAsync;
-import static net.pincette.rs.Box.box;
 import static net.pincette.rs.Chain.with;
 import static net.pincette.rs.Flatten.flatMap;
 import static net.pincette.rs.Reducer.reduce;
 import static net.pincette.rs.Util.asValueAsync;
+import static net.pincette.rs.Util.completablePublisher;
 import static net.pincette.rs.Util.discard;
 import static net.pincette.rs.Util.empty;
 import static net.pincette.rs.Util.lines;
+import static net.pincette.rs.Util.retryPublisher;
 import static net.pincette.rs.json.Util.parseJson;
 import static net.pincette.util.ImmutableBuilder.create;
 import static net.pincette.util.Pair.pair;
@@ -45,6 +47,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow.Processor;
 import java.util.concurrent.Flow.Publisher;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import javax.json.JsonArrayBuilder;
@@ -125,8 +128,7 @@ class Http {
             b ->
                 ok(response)
                     ? addResponseBody(value, b, as)
-                    : addError(value, response.getStatus(), b))
-        .exceptionally(e -> addError(value, response.getStatus(), createValue(e.getMessage())));
+                    : addError(value, response.getStatus(), b));
   }
 
   private static JsonObject addResponseBody(
@@ -304,6 +306,10 @@ class Http {
     return response.getStatus() < 300;
   }
 
+  private static Consumer<Throwable> onException(final Context context) {
+    return e -> exceptionLogger(e, HTTP, e::getMessage, context);
+  }
+
   private static CompletionStage<JsonValue> reducedResponseBody(
       final Response response, final Publisher<ByteBuffer> body) {
     return Optional.of(response)
@@ -346,6 +352,43 @@ class Http {
         .get();
   }
 
+  private static Function<Message<String, JsonObject>, CompletionStage<Message<String, JsonObject>>>
+      retryExecute(
+          final Function<JsonObject, CompletionStage<Pair<Response, Publisher<ByteBuffer>>>>
+              execute,
+          final String as,
+          final Context context) {
+    return message ->
+        tryForever(
+            () ->
+                execute
+                    .apply(message.value)
+                    .thenComposeAsync(
+                        pair -> addResponseBody(message.value, pair.first, pair.second, as))
+                    .thenApply(message::withValue),
+            HTTP,
+            () -> null,
+            context);
+  }
+
+  private static Function<Message<String, JsonObject>, Publisher<Message<String, JsonObject>>>
+      retryExecuteUnwind(
+          final Function<JsonObject, CompletionStage<Pair<Response, Publisher<ByteBuffer>>>>
+              execute,
+          final String as,
+          final Context context) {
+    return message ->
+        retryPublisher(
+            () ->
+                completablePublisher(
+                    () ->
+                        execute
+                            .apply(message.value)
+                            .thenApply(pair -> transform(message, pair.first, pair.second, as))),
+            RETRY,
+            onException(context));
+  }
+
   private static Request setHeaders(final Request request, final JsonObject headers) {
     return request.headers(
         h ->
@@ -380,17 +423,8 @@ class Http {
             context);
 
     return expr.getBoolean(UNWIND, false) && as != null
-        ? box(
-            mapAsync(
-                message -> execute.apply(message.value).thenApply(pair -> pair(message, pair))),
-            flatMap(pair -> transform(pair.first, pair.second.first, pair.second.second, as)))
-        : mapAsync(
-            message ->
-                execute
-                    .apply(message.value)
-                    .thenComposeAsync(
-                        pair -> addResponseBody(message.value, pair.first, pair.second, as))
-                    .thenApply(message::withValue));
+        ? flatMap(retryExecuteUnwind(execute, as, context))
+        : mapAsync(retryExecute(execute, as, context));
   }
 
   private static Publisher<Message<String, JsonObject>> transform(

@@ -94,7 +94,7 @@ class Lookup {
     return retryPublisher(
         () -> aggregationPublisher(context.database.getCollection(collection), query),
         RETRY,
-        e -> exceptionLogger(e, "$lookup", context));
+        e -> exceptionLogger(e, LOOKUP, context));
   }
 
   private static JsonArray query(final JsonObject expression) {
