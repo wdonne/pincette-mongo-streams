@@ -7,7 +7,7 @@
   <groupId>net.pincette</groupId>
   <artifactId>pincette-mongo-streams</artifactId>
   <packaging>jar</packaging>
-  <version>3.1.5</version>
+  <version>3.1.6</version>
   <name>pincette-mongo-streams</name>
   <description>MongoDB Utilities</description>
   <url>https://github.com/wdonne/pincette-mongo-streams</url>
@@ -67,37 +67,27 @@
     <dependency>
       <groupId>net.pincette</groupId>
       <artifactId>pincette-mongo</artifactId>
-      <version>4.0.9</version>
+      <version>4.0.10</version>
     </dependency>
     <dependency>
       <groupId>net.pincette</groupId>
       <artifactId>pincette-rs</artifactId>
-      <version>3.0.6</version>
-    </dependency>
-    <dependency>
-      <groupId>net.pincette</groupId>
-      <artifactId>pincette-rs-json</artifactId>
-      <version>1.0.4</version>
-    </dependency>
-    <dependency>
-      <groupId>net.pincette</groupId>
-      <artifactId>pincette-rs-streams</artifactId>
-      <version>1.1.4</version>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.jetty</groupId>
-      <artifactId>jetty-util</artifactId>
-      <version>11.0.12</version>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.jetty</groupId>
-      <artifactId>jetty-reactive-httpclient</artifactId>
       <version>3.0.7</version>
     </dependency>
     <dependency>
       <groupId>net.pincette</groupId>
+      <artifactId>pincette-rs-json</artifactId>
+      <version>1.0.5</version>
+    </dependency>
+    <dependency>
+      <groupId>net.pincette</groupId>
+      <artifactId>pincette-rs-streams</artifactId>
+      <version>1.1.5</version>
+    </dependency>
+    <dependency>
+      <groupId>net.pincette</groupId>
       <artifactId>pincette-netty-http</artifactId>
-      <version>3.0.5</version>
+      <version>3.0.7</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -169,7 +159,7 @@
             <link>https://docs.oracle.com/en/java/javase/11/docs/api/</link>
             <link>https://www.javadoc.io/doc/net.pincette/pincette-common/2.0.3/</link>
             <link>https://www.javadoc.io/doc/net.pincette/pincette-json/2.0.6/</link>
-            <link>https://www.javadoc.io/doc/net.pincette/pincette-mongo/4.0.8/</link>
+            <link>https://www.javadoc.io/doc/net.pincette/pincette-mongo/4.0.9/</link>
             <link>https://www.javadoc.io/doc/javax.json/javax.json-api/1.1.4/</link>
           </links>
           <sourceFileExcludes>

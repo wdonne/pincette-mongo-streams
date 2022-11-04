@@ -1,5 +1,6 @@
 module net.pincette.mongo.streams {
   requires java.json;
+  requires java.net.http;
   requires net.pincette.json;
   requires org.mongodb.driver.reactivestreams;
   requires net.pincette.common;
@@ -11,8 +12,6 @@ module net.pincette.mongo.streams {
   requires net.pincette.rs.json;
   requires net.pincette.rs.streams;
   requires org.reactivestreams;
-  requires org.eclipse.jetty.client;
-  requires org.eclipse.jetty.reactive.client;
 
   exports net.pincette.mongo.streams;
 }
