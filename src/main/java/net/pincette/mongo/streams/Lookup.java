@@ -75,6 +75,10 @@ class Lookup {
         .map(pair -> create(pair.first).getDatabase(pair.second));
   }
 
+  private static String logLookup(final String collection, final JsonArray query) {
+    return "Collection " + collection + ", lookup: " + string(query);
+  }
+
   private static CompletionStage<JsonArrayBuilder> lookup(
       final String collection, final JsonArray query, final Context context) {
     return tryForever(
@@ -85,7 +89,7 @@ class Lookup {
                         list.stream()
                             .reduce(createArrayBuilder(), JsonArrayBuilder::add, (b1, b2) -> b1)),
         LOOKUP,
-        () -> "Collection " + collection + ", lookup: " + string(query),
+        () -> logLookup(collection, query),
         context);
   }
 
@@ -94,7 +98,7 @@ class Lookup {
     return retryPublisher(
         () -> aggregationPublisher(context.database.getCollection(collection), query),
         RETRY,
-        e -> exceptionLogger(e, LOOKUP, context));
+        e -> exceptionLogger(e, LOOKUP, () -> logLookup(collection, query), context));
   }
 
   private static JsonArray query(final JsonObject expression) {
