@@ -6,7 +6,7 @@ import static java.time.temporal.ChronoUnit.MINUTES;
 import static java.util.Optional.empty;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
 import static net.pincette.json.JsonUtil.isObject;
-import static net.pincette.rs.Async.mapAsync;
+import static net.pincette.rs.Async.mapAsyncSequential;
 import static net.pincette.rs.Filter.filter;
 import static net.pincette.rs.Mapper.map;
 import static net.pincette.rs.Pipe.pipe;
@@ -24,7 +24,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$probe</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Probe {
   private Probe() {}
@@ -37,7 +37,7 @@ class Probe {
             (Message<String, JsonObject> m) ->
                 m.withValue(updateRunning(running, name).orElse(null))))
         .then(filter(m -> m.value != null))
-        .then(mapAsync(m -> context.producer.apply(topic, m)));
+        .then(mapAsyncSequential(m -> context.producer.apply(topic, m)));
   }
 
   static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(

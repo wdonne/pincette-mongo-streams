@@ -18,7 +18,7 @@ import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.streams.Pipeline.DEDUPLICATE;
 import static net.pincette.mongo.streams.Util.ID;
 import static net.pincette.mongo.streams.Util.tryForever;
-import static net.pincette.rs.Async.mapAsync;
+import static net.pincette.rs.Async.mapAsyncSequential;
 import static net.pincette.rs.Commit.commit;
 import static net.pincette.rs.Filter.filter;
 import static net.pincette.rs.Mapper.map;
@@ -52,7 +52,7 @@ import org.bson.conversions.Bson;
 /**
  * The <code>$deduplicate</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  * @since 3.0
  */
 class Deduplicate {
@@ -125,7 +125,7 @@ class Deduplicate {
     return pipe(duplicateFilter((Message<String, JsonObject> m) -> fn.apply(m.value), cacheWindow))
         .then(map(m -> pair(m, fromJson(fn.apply(m.value)))))
         .then(
-            mapAsync(
+            mapAsyncSequential(
                 pair ->
                     exists(collection, eq(ID, pair.second), context)
                         .thenApply(result -> pair(pair, result))))

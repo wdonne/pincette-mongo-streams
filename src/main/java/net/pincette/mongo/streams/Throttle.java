@@ -5,7 +5,7 @@ import static java.time.Instant.now;
 import static java.time.temporal.ChronoUnit.SECONDS;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static net.pincette.json.JsonUtil.isObject;
-import static net.pincette.rs.Async.mapAsync;
+import static net.pincette.rs.Async.mapAsyncSequential;
 import static net.pincette.util.ScheduledCompletionStage.supplyAsyncAfter;
 import static net.pincette.util.Util.must;
 
@@ -19,7 +19,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$throttle</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  * @since 3.0
  */
 class Throttle {
@@ -33,7 +33,7 @@ class Throttle {
 
     final Running running = new Running(expression.asJsonObject().getInt(MAX_PER_SECOND));
 
-    return mapAsync(m -> updateRunning(running).thenApply(r -> m));
+    return mapAsyncSequential(m -> updateRunning(running).thenApply(r -> m));
   }
 
   private static CompletionStage<Boolean> updateRunning(final Running running) {

@@ -7,7 +7,7 @@ import static net.pincette.json.JsonUtil.string;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.streams.Pipeline.SEND;
 import static net.pincette.mongo.streams.Util.tryForever;
-import static net.pincette.rs.Async.mapAsync;
+import static net.pincette.rs.Async.mapAsyncSequential;
 import static net.pincette.rs.Box.box;
 import static net.pincette.rs.Filter.filter;
 import static net.pincette.util.Util.must;
@@ -23,7 +23,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The $send operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Send {
   private static final String TOPIC = "topic";
@@ -42,7 +42,7 @@ class Send {
         function(expr.getValue("/" + TOPIC), context.features);
 
     return box(
-        mapAsync(
+        mapAsyncSequential(
             (Message<String, JsonObject> m) ->
                 Optional.of(topic.apply(m.value))
                     .filter(JsonUtil::isString)

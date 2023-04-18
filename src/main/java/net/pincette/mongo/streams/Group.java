@@ -3,6 +3,7 @@ package net.pincette.mongo.streams;
 import static com.mongodb.client.model.Filters.eq;
 import static java.lang.Math.pow;
 import static java.lang.Math.sqrt;
+import static java.lang.String.valueOf;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.security.MessageDigest.getInstance;
 import static java.util.Optional.ofNullable;
@@ -74,7 +75,7 @@ import org.bson.Document;
 /**
  * The <code>$group</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Group {
   private static final String ADD_TO_SET = "$addToSet";
@@ -192,7 +193,7 @@ class Group {
   }
 
   private static String digest(final JsonValue expression) {
-    return new String(toHex(digester.digest(string(expression).getBytes(UTF_8))));
+    return valueOf(toHex(digester.digest(string(expression).getBytes(UTF_8))));
   }
 
   private static Function<JsonObject, JsonValue> expression(

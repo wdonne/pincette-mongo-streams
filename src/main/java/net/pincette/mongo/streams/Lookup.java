@@ -22,7 +22,7 @@ import static net.pincette.mongo.streams.Pipeline.MATCH;
 import static net.pincette.mongo.streams.Util.RETRY;
 import static net.pincette.mongo.streams.Util.exceptionLogger;
 import static net.pincette.mongo.streams.Util.tryForever;
-import static net.pincette.rs.Async.mapAsync;
+import static net.pincette.rs.Async.mapAsyncSequential;
 import static net.pincette.rs.Chain.with;
 import static net.pincette.rs.Filter.filter;
 import static net.pincette.rs.Flatten.flatMap;
@@ -52,7 +52,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$lookup</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Lookup {
   private static final String AS = "as";
@@ -139,7 +139,7 @@ class Lookup {
             m ->
                 unwindResult(
                     m, lookupPublisher(from, queryFunction.apply(m.value), localContext), as))
-        : pipe(mapAsync(
+        : pipe(mapAsyncSequential(
                 (Message<String, JsonObject> m) ->
                     lookup(from, queryFunction.apply(m.value), localContext)
                         .thenApply(builder -> pair(m, builder))))

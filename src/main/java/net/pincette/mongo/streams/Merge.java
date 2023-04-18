@@ -18,7 +18,7 @@ import static net.pincette.mongo.streams.Util.RETRY;
 import static net.pincette.mongo.streams.Util.exceptionLogger;
 import static net.pincette.mongo.streams.Util.matchFields;
 import static net.pincette.mongo.streams.Util.matchQuery;
-import static net.pincette.rs.Async.mapAsync;
+import static net.pincette.rs.Async.mapAsyncSequential;
 import static net.pincette.rs.Filter.filter;
 import static net.pincette.rs.Mapper.map;
 import static net.pincette.rs.Pipe.pipe;
@@ -42,7 +42,7 @@ import org.bson.Document;
 /**
  * The <code>$merge</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Merge {
   private static final String FAIL = "fail";
@@ -170,7 +170,7 @@ class Merge {
             (Message<String, JsonObject> m) ->
                 pair(m, matchQuery(m.value, fields).orElseThrow(() -> exception(expr)))))
         .then(
-            mapAsync(
+            mapAsyncSequential(
                 pair ->
                     process(
                             pair.first.value,

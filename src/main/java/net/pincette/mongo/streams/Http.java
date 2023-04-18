@@ -16,7 +16,7 @@ import static net.pincette.mongo.streams.Pipeline.HTTP;
 import static net.pincette.mongo.streams.Util.RETRY;
 import static net.pincette.mongo.streams.Util.exceptionLogger;
 import static net.pincette.mongo.streams.Util.tryForever;
-import static net.pincette.rs.Async.mapAsync;
+import static net.pincette.rs.Async.mapAsyncSequential;
 import static net.pincette.rs.Chain.with;
 import static net.pincette.rs.Flatten.flatMap;
 import static net.pincette.rs.FlattenList.flattenList;
@@ -68,7 +68,7 @@ import net.pincette.util.State;
 /**
  * The $http operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Http {
   private static final String AS = "as";
@@ -435,7 +435,7 @@ class Http {
 
     return expr.getBoolean(UNWIND, false) && as != null
         ? flatMap(retryExecuteUnwind(execute, as, context))
-        : mapAsync(retryExecute(execute, as, context));
+        : mapAsyncSequential(retryExecute(execute, as, context));
   }
 
   private static Publisher<Message<String, JsonObject>> transform(

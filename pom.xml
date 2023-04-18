@@ -7,7 +7,7 @@
   <groupId>net.pincette</groupId>
   <artifactId>pincette-mongo-streams</artifactId>
   <packaging>jar</packaging>
-  <version>3.1.8</version>
+  <version>3.1.9</version>
   <name>pincette-mongo-streams</name>
   <description>MongoDB Utilities</description>
   <url>https://github.com/wdonne/pincette-mongo-streams</url>
@@ -57,7 +57,7 @@
     <dependency>
       <groupId>net.pincette</groupId>
       <artifactId>pincette-common</artifactId>
-      <version>2.3</version>
+      <version>2.3.1</version>
     </dependency>
     <dependency>
       <groupId>net.pincette</groupId>
@@ -67,12 +67,12 @@
     <dependency>
       <groupId>net.pincette</groupId>
       <artifactId>pincette-mongo</artifactId>
-      <version>4.1</version>
+      <version>4.1.1</version>
     </dependency>
     <dependency>
       <groupId>net.pincette</groupId>
       <artifactId>pincette-rs</artifactId>
-      <version>3.1</version>
+      <version>3.1.2</version>
     </dependency>
     <dependency>
       <groupId>net.pincette</groupId>
@@ -93,7 +93,7 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <version>5.9.0</version>
+      <version>5.9.2</version>
       <scope>test</scope>
     </dependency>
     <dependency>
