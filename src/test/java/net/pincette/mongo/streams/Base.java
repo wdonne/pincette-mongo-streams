@@ -18,8 +18,9 @@ import static org.reactivestreams.FlowAdapters.toFlowPublisher;
 import java.util.List;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow.Processor;
+import java.util.concurrent.Flow.Publisher;
 import java.util.function.BiFunction;
-import java.util.logging.Logger;
+import java.util.function.Supplier;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
 import net.pincette.rs.Source;
@@ -52,13 +53,13 @@ public class Base {
         name -> forEach(toFlowPublisher(resources.database.getCollection(name).drop()), v -> {}));
   }
 
-  private static List<Message<String, JsonObject>> inputMessages(final List<JsonObject> messages) {
-    return messages.stream()
-        .map(
-            m ->
-                message(
-                    ofNullable(m.getString(ID, null)).orElseGet(() -> randomUUID().toString()), m))
-        .collect(toList());
+  static Message<String, JsonObject> inputMessage(final JsonObject message) {
+    return message(
+        ofNullable(message.getString(ID, null)).orElseGet(() -> randomUUID().toString()), message);
+  }
+
+  static List<Message<String, JsonObject>> inputMessages(final List<JsonObject> messages) {
+    return messages.stream().map(Base::inputMessage).collect(toList());
   }
 
   protected void drop(final String collection) {
@@ -74,6 +75,13 @@ public class Base {
       final JsonArray pipeline,
       final List<JsonObject> messages,
       final BiFunction<String, Message<String, JsonObject>, CompletionStage<Boolean>> producer) {
+    return runTest(pipeline, () -> Source.of(inputMessages(messages)), producer);
+  }
+
+  protected List<Message<String, JsonObject>> runTest(
+      final JsonArray pipeline,
+      final Supplier<Publisher<Message<String, JsonObject>>> messages,
+      final BiFunction<String, Message<String, JsonObject>, CompletionStage<Boolean>> producer) {
     final Processor<Message<String, JsonObject>, Message<String, JsonObject>> pipe =
         create(
             pipeline,
@@ -84,7 +92,7 @@ public class Base {
                 .withStageExtensions(map(pair("$wait", (expr, ctx) -> Wait.stage(expr))))
                 .withProducer(producer != null ? producer : (t, m) -> completedFuture(true)));
 
-    Source.of(inputMessages(messages)).subscribe(pipe);
+    messages.get().subscribe(pipe);
 
     return asList(pipe);
   }
