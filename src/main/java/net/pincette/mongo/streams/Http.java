@@ -402,6 +402,7 @@ class Http {
       final HttpRequest.Builder builder, final JsonObject headers) {
     return builder.headers(
         headers.entrySet().stream()
+            .filter(e -> e.getValue() != null && !e.getValue().equals(NULL))
             .flatMap(
                 e ->
                     Optional.of(e.getValue())
