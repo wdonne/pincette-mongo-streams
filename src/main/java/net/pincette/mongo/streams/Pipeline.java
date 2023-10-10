@@ -57,6 +57,7 @@ import net.pincette.util.State;
  *       should be the value of the <code>expression</code> field. The <code>collection</code> field
  *       is the MongoDB collection that is used for the state. The optional <code>cacheWindow</code>
  *       field is the number of milliseconds messages are kept in a cache for duplicate checking.
+ *       The default value is 1000.
  *   <dt>$delete
  *   <dd>This extension operator has a specification with the mandatory fields <code>from</code> and
  *       <code>on</code>. The former is the name of a MongoDB collection. The latter is either a

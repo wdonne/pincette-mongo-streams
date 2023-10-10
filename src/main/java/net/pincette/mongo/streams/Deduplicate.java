@@ -82,18 +82,7 @@ class Deduplicate {
       final Context context) {
     return tryForever(
         () ->
-            bulkWrite(
-                    collection,
-                    values.stream()
-                        .map(
-                            value ->
-                                new UpdateOneModel<Document>(
-                                    eq(ID, value),
-                                    combine(
-                                        set(ID, value),
-                                        set(TIMESTAMP, new BsonInt64(now().toEpochMilli()))),
-                                    new UpdateOptions().upsert(true)))
-                        .collect(toList()))
+            bulkWrite(collection, values.stream().map(Deduplicate::updateObject).collect(toList()))
                 .thenApply(result -> must(result, BulkWriteResult::wasAcknowledged))
                 .thenApply(result -> true),
         DEDUPLICATE,
@@ -117,11 +106,13 @@ class Deduplicate {
 
     must(expr.containsKey(COLLECTION));
 
-    final Duration cacheWindow = ofMillis(expr.getInt(CACHE_WINDOW, 60000));
+    final Duration cacheWindow = ofMillis(expr.getInt(CACHE_WINDOW, 3000));
     final MongoCollection<Document> collection =
         context.database.getCollection(expr.getString(COLLECTION));
     final Function<JsonObject, JsonValue> fn = function(expr.get(EXPRESSION), context.features);
 
+    // The duplicate filter is needed because when down stream is buffered, the request size will
+    // be larger than 1. An upstream batch may contain duplicates.
     return pipe(duplicateFilter((Message<String, JsonObject> m) -> fn.apply(m.value), cacheWindow))
         .then(map(m -> pair(m, fromJson(fn.apply(m.value)))))
         .then(
@@ -133,5 +124,12 @@ class Deduplicate {
         .then(map(pair -> pair.first))
         .then(commit(list -> save(collection, second(list).collect(toList()), context)))
         .then(map(pair -> pair.first));
+  }
+
+  private static UpdateOneModel<Document> updateObject(final BsonValue value) {
+    return new UpdateOneModel<>(
+        eq(ID, value),
+        combine(set(ID, value), set(TIMESTAMP, new BsonInt64(now().toEpochMilli()))),
+        new UpdateOptions().upsert(true));
   }
 }

@@ -178,6 +178,20 @@ class Http {
                     .andThenGet(() -> pair.first));
   }
 
+  private static String[] encodeHeaders(final JsonObject headers) {
+    return headers.entrySet().stream()
+        .filter(e -> e.getValue() != null && !e.getValue().equals(NULL))
+        .flatMap(
+            e ->
+                Optional.of(e.getValue())
+                    .filter(JsonUtil::isArray)
+                    .map(JsonValue::asJsonArray)
+                    .map(JsonArray::stream)
+                    .map(s -> s.flatMap(v -> Stream.of(e.getKey(), toNative(v).toString())))
+                    .orElseGet(() -> Stream.of(e.getKey(), toNative(e.getValue()).toString())))
+        .toArray(String[]::new);
+  }
+
   private static Optional<CompletionStage<HttpResponse<Publisher<List<ByteBuffer>>>>> execute(
       final HttpClient client,
       final Supplier<Optional<HttpRequest>> request,
@@ -400,18 +414,10 @@ class Http {
 
   private static HttpRequest.Builder setHeaders(
       final HttpRequest.Builder builder, final JsonObject headers) {
-    return builder.headers(
-        headers.entrySet().stream()
-            .filter(e -> e.getValue() != null && !e.getValue().equals(NULL))
-            .flatMap(
-                e ->
-                    Optional.of(e.getValue())
-                        .filter(JsonUtil::isArray)
-                        .map(JsonValue::asJsonArray)
-                        .map(JsonArray::stream)
-                        .map(s -> s.flatMap(v -> Stream.of(e.getKey(), toNative(v).toString())))
-                        .orElseGet(() -> Stream.of(e.getKey(), toNative(e.getValue()).toString())))
-            .toArray(String[]::new));
+    return Optional.of(encodeHeaders(headers))
+        .filter(h -> h.length > 0)
+        .map(builder::headers)
+        .orElse(builder);
   }
 
   static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
