@@ -1,0 +1,16 @@
+[
+  {
+    "$http": {
+      "url": "http://localhost:9000/http9",
+      "method": "POST",
+      "headers": {
+        "desired-content-type": "application/json",
+        "content-type": "application/json"
+      },
+      "body": {
+        "test": "test"
+      },
+      "as": "result"
+    }
+  }
+]

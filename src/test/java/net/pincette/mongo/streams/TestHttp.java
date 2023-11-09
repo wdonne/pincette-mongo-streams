@@ -1,20 +1,31 @@
 package net.pincette.mongo.streams;
 
+import static io.netty.buffer.Unpooled.wrappedBuffer;
+import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
+import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static java.time.Duration.ofSeconds;
 import static java.util.stream.Collectors.toList;
+import static net.pincette.io.StreamConnector.copy;
 import static net.pincette.json.JsonUtil.createReader;
 import static net.pincette.json.JsonUtil.objects;
+import static net.pincette.netty.http.Dispatcher.when;
+import static net.pincette.netty.http.HttpServer.accumulate;
 import static net.pincette.netty.http.TestUtil.resourceHandler;
+import static net.pincette.netty.http.Util.simpleResponse;
 import static net.pincette.rs.streams.Message.message;
 import static net.pincette.util.ScheduledCompletionStage.runAsyncAfter;
+import static net.pincette.util.Util.tryToDoRethrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.io.ByteArrayOutputStream;
 import java.util.List;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.json.JsonUtil;
 import net.pincette.netty.http.HttpServer;
+import net.pincette.netty.http.RequestHandlerAccumulated;
+import net.pincette.rs.Source;
 import net.pincette.rs.streams.Message;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +41,23 @@ class TestHttp extends Base {
         .map(JsonValue::asJsonObject)
         .map(o -> message(o.getString(ID, ""), o))
         .collect(toList());
+  }
+
+  private static RequestHandlerAccumulated postHandler() {
+    return (request, requestBody, response) -> {
+      assertEquals(
+          request.headers().get("desired-content-type"), request.headers().get(CONTENT_TYPE));
+
+      final ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+      tryToDoRethrow(() -> copy(requestBody, out));
+
+      return simpleResponse(
+          response,
+          OK,
+          request.headers().get(CONTENT_TYPE),
+          Source.of(wrappedBuffer(out.toByteArray())));
+    };
   }
 
   private static JsonArray read(final String resource) {
@@ -78,6 +106,30 @@ class TestHttp extends Base {
     runHttpTest("http5");
   }
 
+  @Test
+  @DisplayName("$http 6")
+  void http6() {
+    runHttpTest("http6");
+  }
+
+  @Test
+  @DisplayName("$http 7")
+  void http7() {
+    runHttpTest("http7");
+  }
+
+  @Test
+  @DisplayName("$http 8")
+  void http8() {
+    runHttpTest("http8");
+  }
+
+  @Test
+  @DisplayName("$http 9")
+  void http9() {
+    runHttpTest("http9");
+  }
+
   private void runHttpTest(final String name) {
     assertEquals(
         output(name),
@@ -88,7 +140,11 @@ class TestHttp extends Base {
 
   @BeforeEach
   void startServer() {
-    server = new HttpServer(9000, resourceHandler(path -> "application/json"));
+    server =
+        new HttpServer(
+            9000,
+            when(request -> request.method().name().equals("POST"), accumulate(postHandler()))
+                .orElse(accumulate(resourceHandler(path -> "application/json"))));
     server.run();
   }
 

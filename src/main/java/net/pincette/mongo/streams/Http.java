@@ -8,7 +8,9 @@ import static javax.json.JsonValue.NULL;
 import static javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
 import static net.pincette.json.JsonUtil.getValue;
+import static net.pincette.json.JsonUtil.isArray;
 import static net.pincette.json.JsonUtil.isObject;
+import static net.pincette.json.JsonUtil.string;
 import static net.pincette.json.JsonUtil.stringValue;
 import static net.pincette.json.JsonUtil.toNative;
 import static net.pincette.mongo.Expression.function;
@@ -26,6 +28,7 @@ import static net.pincette.rs.Util.discard;
 import static net.pincette.rs.Util.lines;
 import static net.pincette.rs.Util.retryPublisher;
 import static net.pincette.rs.json.Util.parseJson;
+import static net.pincette.util.Collections.set;
 import static net.pincette.util.ImmutableBuilder.create;
 import static net.pincette.util.Pair.pair;
 import static net.pincette.util.Util.must;
@@ -45,6 +48,7 @@ import java.nio.ByteBuffer;
 import java.security.KeyStore;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow.Processor;
 import java.util.concurrent.Flow.Publisher;
@@ -82,7 +86,14 @@ class Http {
   private static final String PASSWORD = "password";
   private static final String SSL_CONTEXT = "sslContext";
   private static final String STATUS_CODE = "statusCode";
-  private static final String TEXT = "text/plain";
+  private static final String TEXT = "text";
+  private static final Set<String> TEXT_MIME_TYPES =
+      set(
+          "application/rtf",
+          "application/x-www-form-urlencoded",
+          "application/xhtml+xml",
+          "image/svg+xml");
+  private static final String TEXT_PLAIN = "text/plain";
   private static final String UNWIND = "unwind";
   private static final String URL = "url";
 
@@ -137,14 +148,13 @@ class Http {
     return as != null ? createObjectBuilder(value).add(as, body).build() : value;
   }
 
-  private static Optional<JsonValue> body(
-      final JsonObject value, final Function<JsonObject, JsonValue> body) {
-    return ofNullable(body).map(b -> b.apply(value)).filter(JsonUtil::isStructure);
-  }
-
   private static Publisher<ByteBuffer> body(
       final HttpResponse<Publisher<List<ByteBuffer>>> response) {
     return with(response.body()).map(flattenList()).get();
+  }
+
+  private static <T> Optional<String> contentType(final HttpResponse<T> response) {
+    return ofNullable(response.headers()).flatMap(h -> h.firstValue(CONTENT_TYPE));
   }
 
   private static HttpRequest createRequest(final RequestInput input) {
@@ -291,14 +301,12 @@ class Http {
   }
 
   private static <T> boolean isText(final HttpResponse<T> response) {
-    return isType(response, TEXT);
+    return isType(response, TEXT)
+        || contentType(response).filter(TEXT_MIME_TYPES::contains).isPresent();
   }
 
   private static <T> boolean isType(final HttpResponse<T> response, final String contentType) {
-    return Optional.ofNullable(response.headers())
-        .flatMap(h -> h.firstValue(CONTENT_TYPE))
-        .filter(type -> type.startsWith(contentType))
-        .isPresent();
+    return contentType(response).filter(type -> type.startsWith(contentType)).isPresent();
   }
 
   private static <T> boolean ok(final HttpResponse<T> response) {
@@ -344,15 +352,20 @@ class Http {
     final URI uri =
         stringValue(url.apply(value)).flatMap(u -> tryToGetSilent(() -> new URI(u))).orElse(null);
     final String m = stringValue(method.apply(value)).orElse(null);
-    final String b = body(value, body).map(JsonUtil::string).orElse(null);
+    final Optional<JsonValue> b = ofNullable(body).map(fn -> fn.apply(value));
     final JsonObject h =
-        body != null
-            ? createObjectBuilder(headers(value, headers).orElseGet(JsonUtil::emptyObject))
-                .add(CONTENT_TYPE, JSON)
-                .build()
+        b.isPresent()
+            ? net.pincette.util.Util.with(
+                () -> headers(value, headers).orElseGet(JsonUtil::emptyObject),
+                given -> setContentType(given, b.get()))
             : headers(value, headers).orElse(null);
 
-    return ofNullable(uri).filter(u -> m != null).map(u -> new RequestInput(u, m, h, b));
+    return ofNullable(uri)
+        .filter(u -> m != null)
+        .map(
+            u ->
+                new RequestInput(
+                    u, m, h, b.map(v -> stringValue(v).orElseGet(() -> string(v))).orElse(null)));
   }
 
   private static Publisher<JsonObject> responseBodyPublisher(
@@ -410,6 +423,14 @@ class Http {
                                             message.withValue(addBadRequest(message.value)))))),
             RETRY,
             onException(context));
+  }
+
+  private static JsonObject setContentType(final JsonObject headers, final JsonValue value) {
+    final Supplier<String> tryJson = () -> isObject(value) || isArray(value) ? JSON : TEXT_PLAIN;
+
+    return headers.containsKey(CONTENT_TYPE)
+        ? headers
+        : createObjectBuilder(headers).add(CONTENT_TYPE, tryJson.get()).build();
   }
 
   private static HttpRequest.Builder setHeaders(

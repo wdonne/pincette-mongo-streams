@@ -1,0 +1,13 @@
+[
+  {
+    "$http": {
+      "url": "http://localhost:9000/http6",
+      "method": "POST",
+      "headers": {
+        "desired-content-type": "text/plain"
+      },
+      "body": "test",
+      "as": "result"
+    }
+  }
+]

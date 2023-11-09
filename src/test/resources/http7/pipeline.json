@@ -1,0 +1,14 @@
+[
+  {
+    "$http": {
+      "url": "http://localhost:9000/http7",
+      "method": "POST",
+      "headers": {
+        "desired-content-type": "text",
+        "content-type": "text"
+      },
+      "body": "test",
+      "as": "result"
+    }
+  }
+]
