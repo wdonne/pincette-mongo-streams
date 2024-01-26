@@ -32,7 +32,8 @@ class Trace {
                     () ->
                         LOGGER.info(
                             () ->
-                                string(function != null ? function.apply(m.value) : m.value, true)))
+                                string(
+                                    function != null ? function.apply(m.value) : m.value, false)))
                 .andThenGet(() -> m));
   }
 }
