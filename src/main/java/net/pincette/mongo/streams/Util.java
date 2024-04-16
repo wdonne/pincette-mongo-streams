@@ -5,7 +5,6 @@ import static java.util.Collections.emptySet;
 import static java.util.Optional.ofNullable;
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Logger.getLogger;
-import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static net.pincette.json.JsonUtil.asString;
 import static net.pincette.json.JsonUtil.createArrayBuilder;
@@ -36,7 +35,7 @@ import net.pincette.util.Pair;
 /**
  * Some utilities.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Util {
   static final String ID = "_id";
@@ -91,7 +90,7 @@ class Util {
         .map(field -> getValue(json, toJsonPointer(field)).map(value -> pair(field, value)))
         .filter(Optional::isPresent)
         .map(Optional::get)
-        .collect(toList());
+        .toList();
   }
 
   static Set<String> matchFields(final JsonObject expression, final String defaultField) {

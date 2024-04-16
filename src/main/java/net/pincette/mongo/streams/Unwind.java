@@ -1,7 +1,6 @@
 package net.pincette.mongo.streams;
 
 import static java.util.UUID.randomUUID;
-import static java.util.stream.Collectors.toList;
 import static javax.json.JsonValue.NULL;
 import static net.pincette.json.JsonUtil.asString;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
@@ -39,7 +38,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$unwind</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Unwind {
   private static final String INCLUDE_ARRAY_INDEX = "includeArrayIndex";
@@ -68,7 +67,7 @@ class Unwind {
 
   private static JsonObjectBuilder set(
       final JsonObject json, final String path, final JsonValue value, final String currentPath) {
-    final String prefix = !currentPath.equals("") ? (currentPath + ".") : "";
+    final String prefix = !currentPath.isEmpty() ? (currentPath + ".") : "";
     final Function<Entry<String, JsonValue>, JsonValue> tryObject =
         e ->
             isObject(e.getValue())
@@ -118,7 +117,7 @@ class Unwind {
     return getArray(json, toJsonPointer(path))
         .filter(array -> !array.isEmpty())
         .map(array -> Source.of(unwind(json, path, array, includeArrayIndex, newIds)))
-        .orElseGet(() -> Source.of(emptyArray(json, includeArrayIndex).collect(toList())));
+        .orElseGet(() -> Source.of(emptyArray(json, includeArrayIndex).toList()));
   }
 
   private static List<JsonObject> unwind(
@@ -136,6 +135,6 @@ class Unwind {
                         b -> includeArrayIndex != null, b -> b.add(includeArrayIndex, pair.second))
                     .build()
                     .build())
-        .collect(toList());
+        .toList();
   }
 }

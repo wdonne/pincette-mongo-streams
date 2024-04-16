@@ -5,7 +5,6 @@ import static com.mongodb.client.model.Updates.combine;
 import static com.mongodb.client.model.Updates.set;
 import static java.time.Duration.ofMillis;
 import static java.time.Instant.now;
-import static java.util.stream.Collectors.toList;
 import static net.pincette.json.JsonUtil.from;
 import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.json.JsonUtil.string;
@@ -82,7 +81,7 @@ class Deduplicate {
       final Context context) {
     return tryForever(
         () ->
-            bulkWrite(collection, values.stream().map(Deduplicate::updateObject).collect(toList()))
+            bulkWrite(collection, values.stream().map(Deduplicate::updateObject).toList())
                 .thenApply(result -> must(result, BulkWriteResult::wasAcknowledged))
                 .thenApply(result -> true),
         DEDUPLICATE,
@@ -122,7 +121,7 @@ class Deduplicate {
                         .thenApply(result -> pair(pair, result))))
         .then(filter(pair -> !pair.second))
         .then(map(pair -> pair.first))
-        .then(commit(list -> save(collection, second(list).collect(toList()), context)))
+        .then(commit(list -> save(collection, second(list).toList(), context)))
         .then(map(pair -> pair.first));
   }
 
