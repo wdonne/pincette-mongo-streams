@@ -2,11 +2,14 @@ package net.pincette.mongo.streams;
 
 import static java.net.http.HttpClient.newBuilder;
 import static java.net.http.HttpResponse.BodyHandlers.ofPublisher;
+import static java.time.Instant.now;
+import static java.time.Instant.ofEpochMilli;
 import static java.util.Optional.ofNullable;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static javax.json.JsonValue.NULL;
 import static javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm;
 import static net.pincette.json.JsonUtil.createObjectBuilder;
+import static net.pincette.json.JsonUtil.getString;
 import static net.pincette.json.JsonUtil.getValue;
 import static net.pincette.json.JsonUtil.isArray;
 import static net.pincette.json.JsonUtil.isObject;
@@ -36,6 +39,7 @@ import static net.pincette.util.Util.tryToDoRethrow;
 import static net.pincette.util.Util.tryToGetRethrow;
 import static net.pincette.util.Util.tryToGetSilent;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -46,6 +50,7 @@ import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.security.KeyStore;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -225,7 +230,7 @@ class Http {
   private static Function<
           JsonObject, Optional<CompletionStage<HttpResponse<Publisher<List<ByteBuffer>>>>>>
       execute(
-          final HttpClient client,
+          final Supplier<HttpClient> client,
           final Function<JsonObject, JsonValue> url,
           final Function<JsonObject, JsonValue> method,
           final Function<JsonObject, JsonValue> headers,
@@ -233,12 +238,37 @@ class Http {
           final Context context) {
     return json ->
         execute(
-            client,
+            client.get(),
             () -> requestInput(json, url, method, headers, requestBody).map(Http::createRequest),
             context);
   }
 
-  private static HttpClient getClient(final JsonObject expression) {
+  private static Supplier<HttpClient> getClient(
+      final JsonObject expression, final Context context) {
+    final State<HttpClient> client = new State<>();
+    final File keyStore =
+        getString(expression, "/" + SSL_CONTEXT + "/" + KEY_STORE).map(File::new).orElse(null);
+    final State<Instant> loaded = new State<>(now());
+
+    return () -> {
+      if (client.get() == null
+          || (keyStore != null
+              && keyStore.canRead()
+              && ofEpochMilli(keyStore.lastModified()).isAfter(loaded.get()))) {
+        client.set(newClient(expression));
+
+        if (keyStore != null && keyStore.canRead()) {
+          context.logger.info(
+              () -> "Loaded client certificate key store " + keyStore.getAbsolutePath());
+          loaded.set(ofEpochMilli(keyStore.lastModified()));
+        }
+      }
+
+      return client.get();
+    };
+  }
+
+  private static HttpClient newClient(final JsonObject expression) {
     final HttpClient.Builder builder =
         newBuilder().version(Version.HTTP_1_1).followRedirects(Redirect.NORMAL);
 
@@ -450,7 +480,7 @@ class Http {
     must(expr.containsKey(METHOD) && expr.containsKey(URL));
 
     final String as = expr.getString(AS, null);
-    final HttpClient client = getClient(expr);
+    final Supplier<HttpClient> client = getClient(expr, context);
     final Function<JsonObject, Optional<CompletionStage<HttpResponse<Publisher<List<ByteBuffer>>>>>>
         execute =
             execute(
@@ -500,18 +530,5 @@ class Http {
         .orElseGet(() -> Source.of(message));
   }
 
-  private static class RequestInput {
-    private final String body;
-    private final JsonObject headers;
-    private final String method;
-    private final URI uri;
-
-    private RequestInput(
-        final URI uri, final String method, final JsonObject headers, final String body) {
-      this.uri = uri;
-      this.method = method;
-      this.headers = headers;
-      this.body = body;
-    }
-  }
+  private record RequestInput(URI uri, String method, JsonObject headers, String body) {}
 }

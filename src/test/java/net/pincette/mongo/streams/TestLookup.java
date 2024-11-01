@@ -1,7 +1,6 @@
 package net.pincette.mongo.streams;
 
 import static java.util.Comparator.comparing;
-import static java.util.stream.Collectors.toList;
 import static net.pincette.json.Factory.a;
 import static net.pincette.json.Factory.f;
 import static net.pincette.json.Factory.o;
@@ -197,7 +196,7 @@ class TestLookup extends Base {
             .map(m -> m.value)
             .map(v -> v.getJsonObject(OTHER))
             .sorted(comparing(v -> v.getString(ID)))
-            .collect(toList()));
+            .toList());
   }
 
   private void prepare() {

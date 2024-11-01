@@ -4,7 +4,6 @@ import static java.util.Optional.ofNullable;
 import static java.util.UUID.randomUUID;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static java.util.logging.Logger.getGlobal;
-import static java.util.stream.Collectors.toList;
 import static net.pincette.mongo.streams.Pipeline.create;
 import static net.pincette.rs.Chain.with;
 import static net.pincette.rs.Reducer.forEach;
@@ -59,7 +58,7 @@ public class Base {
   }
 
   static List<Message<String, JsonObject>> inputMessages(final List<JsonObject> messages) {
-    return messages.stream().map(Base::inputMessage).collect(toList());
+    return messages.stream().map(Base::inputMessage).toList();
   }
 
   protected void drop(final String collection) {

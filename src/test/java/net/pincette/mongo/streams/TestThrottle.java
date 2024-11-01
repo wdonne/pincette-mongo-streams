@@ -3,7 +3,6 @@ package net.pincette.mongo.streams;
 import static java.lang.Math.round;
 import static java.time.Duration.between;
 import static java.time.Instant.now;
-import static java.util.stream.Collectors.toList;
 import static net.pincette.json.Factory.a;
 import static net.pincette.json.Factory.f;
 import static net.pincette.json.Factory.o;
@@ -34,12 +33,12 @@ class TestThrottle extends Base {
     final int max = 10;
     final int total = 100;
     final List<JsonObject> messages =
-        rangeInclusive(0, total).map(v -> o(f("value", v(v)))).collect(toList());
+        rangeInclusive(0, total).map(v -> o(f("value", v(v)))).toList();
     final Instant start = now();
     final List<Message<String, JsonObject>> result =
         runTest(a(o(f("$throttle", o(f("maxPerSecond", v(max)))))), messages);
 
     assertTrue(withinPercent(total, max, between(start, now()).getSeconds(), 5));
-    assertEquals(messages, result.stream().map(m -> m.value).collect(toList()));
+    assertEquals(messages, result.stream().map(m -> m.value).toList());
   }
 }

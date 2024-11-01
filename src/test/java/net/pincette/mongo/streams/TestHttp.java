@@ -4,7 +4,6 @@ import static io.netty.buffer.Unpooled.wrappedBuffer;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
 import static java.time.Duration.ofSeconds;
-import static java.util.stream.Collectors.toList;
 import static net.pincette.io.StreamConnector.copy;
 import static net.pincette.json.JsonUtil.createReader;
 import static net.pincette.json.JsonUtil.objects;
@@ -40,7 +39,7 @@ class TestHttp extends Base {
         .filter(JsonUtil::isObject)
         .map(JsonValue::asJsonObject)
         .map(o -> message(o.getString(ID, ""), o))
-        .collect(toList());
+        .toList();
   }
 
   private static RequestHandlerAccumulated postHandler() {
@@ -135,7 +134,7 @@ class TestHttp extends Base {
         output(name),
         runTest(
             read(resource(name, "pipeline.json")),
-            objects(read(resource(name, "input.json"))).collect(toList())));
+            objects(read(resource(name, "input.json"))).toList()));
   }
 
   @BeforeEach
