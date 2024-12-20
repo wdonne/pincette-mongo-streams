@@ -14,7 +14,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$match</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Match {
   private Match() {}

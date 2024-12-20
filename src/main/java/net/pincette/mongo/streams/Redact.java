@@ -28,7 +28,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$redact</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Redact {
   private static final JsonValue DESCEND = createValue("DESCEND");

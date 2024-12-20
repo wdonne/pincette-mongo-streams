@@ -25,7 +25,7 @@ import org.bson.Document;
 /**
  * The <code>$delete</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Delete {
   private static final String FROM = "from";

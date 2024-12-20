@@ -13,7 +13,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$setKey</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class SetKey {
   private SetKey() {}

@@ -17,7 +17,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$replaceWith</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class ReplaceWith {
   private ReplaceWith() {}

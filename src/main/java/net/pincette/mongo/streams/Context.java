@@ -12,7 +12,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The context for a pipeline stage.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  * @since 1.1
  */
 public class Context {

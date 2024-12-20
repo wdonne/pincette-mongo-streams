@@ -23,7 +23,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$bucket</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Bucket {
   private static final String AND = "$and";

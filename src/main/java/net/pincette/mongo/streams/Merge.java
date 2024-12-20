@@ -112,37 +112,31 @@ class Merge {
       final JsonObject fromCollection,
       final JsonObject expression,
       final MongoCollection<Document> collection) {
-    switch (getWhenMatched(expression)) {
-      case FAIL:
-        throw exception(expression);
-      case KEEP_EXISTING:
-        return completedFuture(fromCollection);
-      case MERGE_FIELD:
-        return update(
-            collection,
-            copy(fromStream, createObjectBuilder(fromCollection)).build(),
-            fromCollection);
-      case REPLACE:
-        return update(collection, fromStream, fromCollection);
-      default:
-        return completedFuture(emptyObject());
-    }
+    return switch (getWhenMatched(expression)) {
+      case FAIL -> throw exception(expression);
+      case KEEP_EXISTING -> completedFuture(fromCollection);
+      case MERGE_FIELD ->
+          update(
+              collection,
+              copy(fromStream, createObjectBuilder(fromCollection)).build(),
+              fromCollection);
+      case REPLACE -> update(collection, fromStream, fromCollection);
+      default -> completedFuture(emptyObject());
+    };
   }
 
   private static CompletionStage<JsonObject> processNew(
       final JsonObject fromStream,
       final JsonObject expression,
       final MongoCollection<Document> collection) {
-    switch (expression.getString(WHEN_NOT_MATCHED, INSERT)) {
-      case FAIL:
-        throw exception(expression);
-      case INSERT:
-        return Optional.of(addId(fromStream))
-            .map(json -> update(collection, json, null))
-            .orElseGet(() -> completedFuture(null));
-      default:
-        return completedFuture(emptyObject());
-    }
+    return switch (expression.getString(WHEN_NOT_MATCHED, INSERT)) {
+      case FAIL -> throw exception(expression);
+      case INSERT ->
+          Optional.of(addId(fromStream))
+              .map(json -> update(collection, json, null))
+              .orElseGet(() -> completedFuture(null));
+      default -> completedFuture(emptyObject());
+    };
   }
 
   private static Message<String, JsonObject> setId(

@@ -14,7 +14,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$out</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Out {
   private static final String INSERT = "insert";

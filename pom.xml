@@ -7,7 +7,7 @@
   <groupId>net.pincette</groupId>
   <artifactId>pincette-mongo-streams</artifactId>
   <packaging>jar</packaging>
-  <version>3.1.21</version>
+  <version>3.1.22</version>
   <name>pincette-mongo-streams</name>
   <description>MongoDB Utilities</description>
   <url>https://github.com/wdonne/pincette-mongo-streams</url>
@@ -67,33 +67,33 @@
     <dependency>
       <groupId>net.pincette</groupId>
       <artifactId>pincette-mongo</artifactId>
-      <version>4.1.10</version>
+      <version>4.1.11</version>
     </dependency>
     <dependency>
       <groupId>net.pincette</groupId>
       <artifactId>pincette-rs</artifactId>
-      <version>3.7.0</version>
+      <version>3.7.1</version>
     </dependency>
     <dependency>
       <groupId>net.pincette</groupId>
       <artifactId>pincette-rs-json</artifactId>
-      <version>1.0.15</version>
+      <version>1.0.16</version>
     </dependency>
     <dependency>
       <groupId>net.pincette</groupId>
       <artifactId>pincette-rs-streams</artifactId>
-      <version>1.2.5</version>
+      <version>1.2.6</version>
     </dependency>
     <dependency>
       <groupId>net.pincette</groupId>
       <artifactId>pincette-netty-http</artifactId>
-      <version>3.2.3</version>
+      <version>3.2.4</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <version>5.10.3</version>
+      <version>5.11.0</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -136,7 +136,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
-        <version>3.10.1</version>
+        <version>3.11.1</version>
         <configuration>
           <additionalJOptions>
             <additionalJOption>-J-Dhttp.agent=maven-javadoc-plugin-${project.name}

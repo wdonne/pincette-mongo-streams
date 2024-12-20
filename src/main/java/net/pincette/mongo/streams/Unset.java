@@ -16,7 +16,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$unset</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Unset {
   private Unset() {}

@@ -11,7 +11,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$replaceRoot</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class ReplaceRoot {
   private static final String NEW_ROOT = "newRoot";

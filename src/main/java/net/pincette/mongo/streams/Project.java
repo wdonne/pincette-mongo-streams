@@ -39,7 +39,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$project</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Project {
   private static final String ID = "_id";
@@ -62,7 +62,7 @@ class Project {
   private static Optional<String> field(
       final String key, final JsonValue value, final Predicate<JsonValue> predicate) {
     return objectValue(value)
-        .filter(j -> j.keySet().size() == 1)
+        .filter(j -> j.size() == 1)
         .map(j -> j.entrySet().iterator().next())
         .map(e -> field(key + "." + e.getKey(), e.getValue(), predicate))
         .orElseGet(() -> Optional.of(value).filter(predicate).map(v -> key));

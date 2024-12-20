@@ -8,7 +8,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The interface for a pipeline stage.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  * @since 3.0
  */
 @FunctionalInterface

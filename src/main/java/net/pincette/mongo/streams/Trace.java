@@ -16,7 +16,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$trace</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Trace {
   private Trace() {}

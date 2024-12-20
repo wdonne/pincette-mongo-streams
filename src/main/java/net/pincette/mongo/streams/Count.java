@@ -16,7 +16,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$count</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Count {
   private static final String ID = "_id";

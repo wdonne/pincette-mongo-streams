@@ -186,7 +186,7 @@ import net.pincette.util.State;
  *       output documents if the given array was not absent or empty.
  * </dl>
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  * @since 1.0
  * @see net.pincette.mongo.Match
  * @see net.pincette.mongo.Expression

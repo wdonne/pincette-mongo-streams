@@ -24,7 +24,7 @@ import net.pincette.rs.streams.Message;
 /**
  * The <code>$jslt</code> operator.
  *
- * @author Werner Donn\u00e9
+ * @author Werner Donné
  */
 class Jslt {
   private static final String ID = "_id";
