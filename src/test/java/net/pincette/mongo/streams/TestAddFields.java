@@ -29,7 +29,12 @@ class TestAddFields extends Base {
                             f("test3.test", v(1)),
                             f("test4.test.test1", v(2)),
                             f("test4.test.test2", v(3)))))),
-            list(o(f(ID, v("0")), f("test1", v(0)), f("test3", o(f("test", v(0)))))));
+            list(
+                o(
+                    f(ID, v("0")),
+                    f("test1", v(0)),
+                    f("test3", o(f("test", v(0)))),
+                    f("test.test", v(0)))));
 
     assertEquals(1, result.size());
     assertEquals(
@@ -38,7 +43,8 @@ class TestAddFields extends Base {
             f("test1", v(1)),
             f("test2", v(0)),
             f("test3", o(f("test", v(1)))),
-            f("test4", o(f("test", o(f("test1", v(2)), f("test2", v(3))))))),
+            f("test4", o(f("test", o(f("test1", v(2)), f("test2", v(3)))))),
+            f("test.test", v(0))),
         result.get(0).value);
   }
 

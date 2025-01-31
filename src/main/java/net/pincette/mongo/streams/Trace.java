@@ -1,5 +1,6 @@
 package net.pincette.mongo.streams;
 
+import static java.util.Optional.ofNullable;
 import static javax.json.JsonValue.NULL;
 import static net.pincette.json.JsonUtil.string;
 import static net.pincette.mongo.Expression.function;
@@ -25,12 +26,13 @@ class Trace {
       final JsonValue expression, final Context context) {
     final Function<JsonObject, JsonValue> function =
         !expression.equals(NULL) ? function(expression, context.features) : null;
+    final var logger = ofNullable(context.logger).orElse(LOGGER);
 
     return map(
         m ->
             SideEffect.<Message<String, JsonObject>>run(
                     () ->
-                        LOGGER.info(
+                        logger.info(
                             () ->
                                 string(
                                     function != null ? function.apply(m.value) : m.value, false)))

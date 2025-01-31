@@ -43,6 +43,25 @@ class TestGroup extends Base {
     assertEquals(o(f(ID, v(null)), f("avg", v(1.5))), result.get(3).value);
   }
 
+  @Test
+  @DisplayName("$group $count")
+  void count() {
+    final List<Message<String, JsonObject>> result =
+        runTest(
+            a(o(f("$group", o(f(ID, v("$test")), f("count", o(f("$count", o()))))))),
+            list(
+                o(f("test", v("0"))),
+                o(f("test", v("0"))),
+                o(f("test", v("1"))),
+                o(f("test", v("0")))));
+
+    assertEquals(4, result.size());
+    assertEquals(o(f(ID, v("0")), f("count", v(1))), result.get(0).value);
+    assertEquals(o(f(ID, v("0")), f("count", v(2))), result.get(1).value);
+    assertEquals(o(f(ID, v("1")), f("count", v(1))), result.get(2).value);
+    assertEquals(o(f(ID, v("0")), f("count", v(3))), result.get(3).value);
+  }
+
   private void group(final String collection) {
     final JsonObject expression =
         collection != null
@@ -72,6 +91,50 @@ class TestGroup extends Base {
   @DisplayName("$group 2")
   void group2() {
     group("pincette-mongo-streams-test");
+  }
+
+  @Test
+  @DisplayName("$group $last 1")
+  void last1() {
+    final List<Message<String, JsonObject>> result =
+        runTest(
+            a(o(f("$group", o(f(ID, v(null)), f("last", o(f("$last", v("$test")))))))),
+            list(o(f("test", v(0))), o(f("test", v(1))), o(f("test", v(2)))));
+
+    assertEquals(3, result.size());
+    assertEquals(o(f(ID, v(null)), f("last", v(0))), result.get(0).value);
+    assertEquals(o(f(ID, v(null)), f("last", v(1))), result.get(1).value);
+    assertEquals(o(f(ID, v(null)), f("last", v(2))), result.get(2).value);
+  }
+
+  @Test
+  @DisplayName("$group $last 2")
+  void last2() {
+    final List<Message<String, JsonObject>> result =
+        runTest(
+            a(
+                o(
+                    f(
+                        "$group",
+                        o(
+                            f(ID, v(null)),
+                            f("last", o(f("$last", v("$$ROOT")))),
+                            f("sum", o(f("$sum", v("$test1")))))))),
+            list(
+                o(f("test1", v(0)), f("test2", v(0))),
+                o(f("test1", v(1)), f("test2", v(1))),
+                o(f("test1", v(2)), f("test2", v(2)))));
+
+    assertEquals(3, result.size());
+    assertEquals(
+        o(f(ID, v(null)), f("last", o(f("test1", v(0)), f("test2", v(0)))), f("sum", v(0))),
+        result.get(0).value);
+    assertEquals(
+        o(f(ID, v(null)), f("last", o(f("test1", v(1)), f("test2", v(1)))), f("sum", v(1))),
+        result.get(1).value);
+    assertEquals(
+        o(f(ID, v(null)), f("last", o(f("test1", v(2)), f("test2", v(2)))), f("sum", v(3))),
+        result.get(2).value);
   }
 
   @Test

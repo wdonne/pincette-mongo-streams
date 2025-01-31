@@ -3,6 +3,7 @@ package net.pincette.mongo.streams;
 import static java.util.stream.Collectors.toMap;
 import static net.pincette.json.JsonUtil.from;
 import static net.pincette.json.JsonUtil.isObject;
+import static net.pincette.json.JsonUtil.transformFieldNames;
 import static net.pincette.json.Transform.transform;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.rs.Mapper.map;
@@ -28,6 +29,8 @@ import net.pincette.rs.streams.Message;
  * @author Werner Donné
  */
 class AddFields {
+  private static final String DOT = "_dot_";
+
   private AddFields() {}
 
   private static JsonObject addFields(
@@ -45,13 +48,18 @@ class AddFields {
 
   private static JsonObject addNewFields(
       final JsonObject json, final Map<String, JsonValue> newValues) {
-    return from(expand(merge(flatten(json, "."), flatten(newValues, ".")), "."));
+    return unescapeDot(
+        from(expand(merge(flatten(escapeDot(json), "."), flatten(newValues, ".")), ".")));
   }
 
   private static Map<String, JsonValue> applyFunctions(
       final JsonObject json, final Map<String, Function<JsonObject, JsonValue>> functions) {
     return functions.entrySet().stream()
         .collect(toMap(Entry::getKey, e -> e.getValue().apply(json)));
+  }
+
+  private static JsonObject escapeDot(final JsonObject json) {
+    return transformFieldNames(json, f -> f.replace(".", DOT)).build();
   }
 
   static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
@@ -63,5 +71,9 @@ class AddFields {
             .collect(toMap(Entry::getKey, e -> function(e.getValue(), context.features)));
 
     return map(m -> m.withValue(addFields(m.value, functions)));
+  }
+
+  private static JsonObject unescapeDot(final JsonObject json) {
+    return transformFieldNames(json, f -> f.replace(DOT, ".")).build();
   }
 }

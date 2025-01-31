@@ -48,6 +48,7 @@ import static net.pincette.util.Util.toHex;
 import static net.pincette.util.Util.tryToGetRethrow;
 
 import com.mongodb.reactivestreams.client.MongoCollection;
+import java.nio.channels.Selector;
 import java.security.MessageDigest;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -67,9 +68,11 @@ import javax.json.JsonStructure;
 import javax.json.JsonValue;
 import net.pincette.json.JsonUtil;
 import net.pincette.mongo.Features;
+import net.pincette.mongo.Implementation;
 import net.pincette.rs.Mapper;
 import net.pincette.rs.streams.Message;
 import net.pincette.util.Pair;
+import net.pincette.util.Util.GeneralException;
 import org.bson.Document;
 
 /**
@@ -84,6 +87,8 @@ class Group {
   private static final String AVG_OP = "$avg";
   private static final String COLLECTION = "_collection";
   private static final String COUNT = "count";
+  private static final String COUNT_OP = "$count";
+  private static final String LAST = "$last";
   private static final String MAX = "$max";
   private static final String MERGE_OBJECTS = "$mergeObjects";
   private static final String MIN = "$min";
@@ -99,6 +104,8 @@ class Group {
       map(
           pair(ADD_TO_SET, Group::addToSet),
           pair(AVG_OP, Group::avg),
+          pair(COUNT_OP, Group::count),
+          pair(LAST, Group::last),
           pair(MAX, Group::max),
           pair(MERGE_OBJECTS, Group::mergeObjects),
           pair(MIN, Group::min),
@@ -192,6 +199,20 @@ class Group {
     return value.asJsonObject().get(AVG);
   }
 
+  private static Operator count(final JsonValue expression, final Features features) {
+    must(
+        expression,
+        e -> isObject(e) && e.asJsonObject().isEmpty(),
+        e -> {
+          throw new GeneralException(
+              "The value of the $count aggregation expression is "
+                  + string(e)
+                  + " instead of the empty object.");
+        });
+
+    return sum(createValue(1), features);
+  }
+
   private static String digest(final JsonValue expression) {
     return valueOf(toHex(digester.digest(string(expression).getBytes(UTF_8))));
   }
@@ -249,6 +270,12 @@ class Group {
         || isBoolean(value)
         || (isString(value) && !isIdentifier(value))
         || isNumber(value);
+  }
+
+  private static Operator last(final JsonValue expression, final Features features) {
+    final Function<JsonObject, JsonValue> function = expression(expression, features);
+
+    return (current, json) -> Optional.of(function.apply(json)).orElse(current);
   }
 
   private static Operator max(final JsonValue expression, final Features features) {
