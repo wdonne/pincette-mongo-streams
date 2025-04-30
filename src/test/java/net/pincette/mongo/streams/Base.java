@@ -33,13 +33,13 @@ public class Base {
   protected static Resources resources;
 
   @AfterAll
-  public static void after() {
+  static void after() {
     cleanUpCollections();
     resources.close();
   }
 
   @BeforeAll
-  public static void before() {
+  static void before() {
     resources = new Resources();
     cleanUpCollections();
   }

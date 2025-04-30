@@ -48,7 +48,6 @@ import static net.pincette.util.Util.toHex;
 import static net.pincette.util.Util.tryToGetRethrow;
 
 import com.mongodb.reactivestreams.client.MongoCollection;
-import java.nio.channels.Selector;
 import java.security.MessageDigest;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -68,7 +67,6 @@ import javax.json.JsonStructure;
 import javax.json.JsonValue;
 import net.pincette.json.JsonUtil;
 import net.pincette.mongo.Features;
-import net.pincette.mongo.Implementation;
 import net.pincette.rs.Mapper;
 import net.pincette.rs.streams.Message;
 import net.pincette.util.Pair;
