@@ -23,6 +23,8 @@ import static net.pincette.rs.Filter.filter;
 import static net.pincette.rs.Mapper.map;
 import static net.pincette.rs.Pipe.pipe;
 import static net.pincette.rs.Util.duplicateFilter;
+import static net.pincette.rs.Util.onCancelProcessor;
+import static net.pincette.rs.Util.onCompleteProcessor;
 import static net.pincette.util.Pair.pair;
 import static net.pincette.util.Util.must;
 
@@ -35,6 +37,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow.Processor;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import javax.json.JsonObject;
@@ -42,6 +45,7 @@ import javax.json.JsonValue;
 import net.pincette.mongo.BsonUtil;
 import net.pincette.rs.streams.Message;
 import net.pincette.util.Pair;
+import net.pincette.util.State;
 import org.bson.BsonDocument;
 import org.bson.BsonInt64;
 import org.bson.BsonValue;
@@ -63,10 +67,14 @@ class Deduplicate {
   private Deduplicate() {}
 
   private static CompletionStage<Boolean> exists(
-      final MongoCollection<Document> collection, final Bson filter, final Context context) {
+      final MongoCollection<Document> collection,
+      final Bson filter,
+      final BooleanSupplier stop,
+      final Context context) {
     return tryForever(
         () -> findOne(collection, filter, BsonDocument.class, null).thenApply(Optional::isPresent),
         DEDUPLICATE,
+        stop,
         () ->
             "Collection "
                 + collection
@@ -78,6 +86,7 @@ class Deduplicate {
   private static CompletionStage<Boolean> save(
       final MongoCollection<Document> collection,
       final List<BsonValue> values,
+      final BooleanSupplier stop,
       final Context context) {
     return tryForever(
         () ->
@@ -85,6 +94,7 @@ class Deduplicate {
                 .thenApply(result -> must(result, BulkWriteResult::wasAcknowledged))
                 .thenApply(result -> true),
         DEDUPLICATE,
+        stop,
         () ->
             "Collection "
                 + collection
@@ -109,20 +119,23 @@ class Deduplicate {
     final MongoCollection<Document> collection =
         context.database.getCollection(expr.getString(COLLECTION));
     final Function<JsonObject, JsonValue> fn = function(expr.get(EXPRESSION), context.features);
+    final State<Boolean> stop = new State<>(false);
 
-    // The duplicate filter is needed because when down stream is buffered, the request size will
+    // The duplicate filter is needed because when downstream is buffered, the request size will
     // be larger than 1. An upstream batch may contain duplicates.
     return pipe(duplicateFilter((Message<String, JsonObject> m) -> fn.apply(m.value), cacheWindow))
         .then(map(m -> pair(m, fromJson(fn.apply(m.value)))))
         .then(
             mapAsyncSequential(
                 pair ->
-                    exists(collection, eq(ID, pair.second), context)
+                    exists(collection, eq(ID, pair.second), stop::get, context)
                         .thenApply(result -> pair(pair, result))))
         .then(filter(pair -> !pair.second))
         .then(map(pair -> pair.first))
-        .then(commit(list -> save(collection, second(list).toList(), context)))
-        .then(map(pair -> pair.first));
+        .then(commit(list -> save(collection, second(list).toList(), stop::get, context)))
+        .then(map(pair -> pair.first))
+        .then(onCancelProcessor(() -> stop.set(true)))
+        .then(onCompleteProcessor(() -> stop.set(true)));
   }
 
   private static UpdateOneModel<Document> updateObject(final BsonValue value) {

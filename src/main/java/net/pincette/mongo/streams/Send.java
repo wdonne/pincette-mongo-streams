@@ -8,8 +8,10 @@ import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.streams.Pipeline.SEND;
 import static net.pincette.mongo.streams.Util.tryForever;
 import static net.pincette.rs.Async.mapAsyncSequential;
-import static net.pincette.rs.Box.box;
 import static net.pincette.rs.Filter.filter;
+import static net.pincette.rs.Pipe.pipe;
+import static net.pincette.rs.Util.onCancelProcessor;
+import static net.pincette.rs.Util.onCompleteProcessor;
 import static net.pincette.util.Util.must;
 
 import java.util.Optional;
@@ -19,6 +21,7 @@ import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.json.JsonUtil;
 import net.pincette.rs.streams.Message;
+import net.pincette.util.State;
 
 /**
  * The $send operator.
@@ -38,11 +41,11 @@ class Send {
 
     must(expr.containsKey(TOPIC));
 
+    final State<Boolean> stop = new State<>(false);
     final Function<JsonObject, JsonValue> topic =
         function(expr.getValue("/" + TOPIC), context.features);
 
-    return box(
-        mapAsyncSequential(
+    return pipe(mapAsyncSequential(
             (Message<String, JsonObject> m) ->
                 Optional.of(topic.apply(m.value))
                     .filter(JsonUtil::isString)
@@ -55,9 +58,12 @@ class Send {
                                         .apply(asString(t).getString(), m)
                                         .thenApply(result -> m.withValue(null)),
                                 SEND,
+                                stop::get,
                                 () -> "Topic " + t + ", send: " + string(m.value),
                                 context))
-                    .orElseGet(() -> completedFuture(m))),
-        filter(m -> m.value != null));
+                    .orElseGet(() -> completedFuture(m))))
+        .then(filter(m -> m.value != null))
+        .then(onCancelProcessor(() -> stop.set(true)))
+        .then(onCompleteProcessor(() -> stop.set(true)));
   }
 }

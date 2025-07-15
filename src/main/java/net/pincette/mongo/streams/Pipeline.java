@@ -96,6 +96,12 @@ import net.pincette.util.State;
  *       the field <code>sslContext</code> you can add client-side authentication. The <code>
  *       keyStore</code> field should refer to a PKCS#12 key store file. The <code>
  *       password</code> field should provide the password for the keys in the key store file.
+ *   <dt>$jq
+ *   <dd>This extension operator transforms the incoming message with a <a
+ *       href="https://github.com/eiiches/jackson-jq">JQ</a> script. Its specification should be a
+ *       string. If it starts with "resource:/" the script will be loaded as a class path resource,
+ *       otherwise it is interpreted as a filename. If the transformation changes or adds the <code>
+ *       _id</code> field then that will become the key of the outgoing message.
  *   <dt>$jslt
  *   <dd>This extension operator transforms the incoming message with a <a
  *       href="https://github.com/schibsted/jslt">JSLT</a> script. Its specification should be a
@@ -201,6 +207,8 @@ public class Pipeline {
   static final String DELETE = "$delete";
   static final String GROUP = "$group";
   static final String HTTP = "$http";
+  static final String INDIVIDUAL_TRACE = "_trace";
+  static final String JQ = "$jq";
   static final String JSLT = "$jslt";
   static final String LOOKUP = "$lookup";
   static final String MATCH = "$match";
@@ -231,6 +239,7 @@ public class Pipeline {
           pair(DELETE, Delete::stage),
           pair(GROUP, Group::stage),
           pair(HTTP, Http::stage),
+          pair(JQ, Jq::stage),
           pair(JSLT, Jslt::stage),
           pair(LOOKUP, Lookup::stage),
           pair(MATCH, Match::stage),
@@ -277,7 +286,9 @@ public class Pipeline {
                             ofNullable(allStages.get(name))
                                 .map(
                                     stage ->
-                                        (context.trace ? wrapProfile(stage, name) : stage)
+                                        (context.trace || shouldTrace(json)
+                                                ? wrapProfile(stage, name)
+                                                : stage)
                                             .apply(json.getValue("/" + name), context))))
         .filter(Optional::isPresent)
         .map(Optional::get)
@@ -311,9 +322,11 @@ public class Pipeline {
   }
 
   private static Optional<String> name(final JsonObject json) {
-    return Optional.of(json.keySet())
-        .filter(keys -> keys.size() == 1)
-        .map(keys -> keys.iterator().next());
+    return json.keySet().stream().filter(k -> !k.equals(INDIVIDUAL_TRACE)).findFirst();
+  }
+
+  private static boolean shouldTrace(final JsonObject json) {
+    return json.getBoolean(INDIVIDUAL_TRACE, false);
   }
 
   private static Stage wrapProfile(final Stage stage, final String name) {

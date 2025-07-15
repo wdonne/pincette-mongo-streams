@@ -25,10 +25,13 @@ import static net.pincette.rs.Async.mapAsyncSequential;
 import static net.pincette.rs.Chain.with;
 import static net.pincette.rs.Flatten.flatMap;
 import static net.pincette.rs.FlattenList.flattenList;
+import static net.pincette.rs.Pipe.pipe;
 import static net.pincette.rs.Reducer.reduce;
 import static net.pincette.rs.Util.completablePublisher;
 import static net.pincette.rs.Util.discard;
 import static net.pincette.rs.Util.lines;
+import static net.pincette.rs.Util.onCancelProcessor;
+import static net.pincette.rs.Util.onCompleteProcessor;
 import static net.pincette.rs.Util.retryPublisher;
 import static net.pincette.rs.json.Util.parseJson;
 import static net.pincette.util.Collections.set;
@@ -57,6 +60,7 @@ import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow.Processor;
 import java.util.concurrent.Flow.Publisher;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -210,6 +214,7 @@ class Http {
   private static Optional<CompletionStage<HttpResponse<Publisher<List<ByteBuffer>>>>> execute(
       final HttpClient client,
       final Supplier<Optional<HttpRequest>> request,
+      final BooleanSupplier stop,
       final Context context) {
     final State<String> message = new State<>();
 
@@ -223,6 +228,7 @@ class Http {
                                 () -> message.set(r.method() + " of " + r.uri()))
                             .andThenGet(() -> client.sendAsync(r, ofPublisher())),
                     HTTP,
+                    stop,
                     message::get,
                     context));
   }
@@ -235,11 +241,13 @@ class Http {
           final Function<JsonObject, JsonValue> method,
           final Function<JsonObject, JsonValue> headers,
           final Function<JsonObject, JsonValue> requestBody,
+          final BooleanSupplier stop,
           final Context context) {
     return json ->
         execute(
             client.get(),
             () -> requestInput(json, url, method, headers, requestBody).map(Http::createRequest),
+            stop,
             context);
   }
 
@@ -413,6 +421,7 @@ class Http {
                   JsonObject, Optional<CompletionStage<HttpResponse<Publisher<List<ByteBuffer>>>>>>
               execute,
           final String as,
+          final BooleanSupplier stop,
           final Context context) {
     return message ->
         tryForever(
@@ -427,6 +436,7 @@ class Http {
                     .orElseGet(
                         () -> completedFuture(message.withValue(addBadRequest(message.value)))),
             HTTP,
+            stop,
             () -> null,
             context);
   }
@@ -481,6 +491,7 @@ class Http {
 
     final String as = expr.getString(AS, null);
     final Supplier<HttpClient> client = getClient(expr, context);
+    final State<Boolean> stop = new State<>(false);
     final Function<JsonObject, Optional<CompletionStage<HttpResponse<Publisher<List<ByteBuffer>>>>>>
         execute =
             execute(
@@ -489,11 +500,14 @@ class Http {
                 function(expr.getValue("/" + METHOD), context.features),
                 getValue(expr, "/" + HEADERS).map(h -> function(h, context.features)).orElse(null),
                 getValue(expr, "/" + BODY).map(b -> function(b, context.features)).orElse(null),
+                stop::get,
                 context);
 
     return expr.getBoolean(UNWIND, false) && as != null
         ? flatMap(retryExecuteUnwind(execute, as, context))
-        : mapAsyncSequential(retryExecute(execute, as, context));
+        : pipe(mapAsyncSequential(retryExecute(execute, as, stop::get, context)))
+            .then(onCancelProcessor(() -> stop.set(true)))
+            .then(onCompleteProcessor(() -> stop.set(true)));
   }
 
   private static Publisher<Message<String, JsonObject>> transform(

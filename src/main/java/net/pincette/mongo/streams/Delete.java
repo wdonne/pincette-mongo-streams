@@ -8,9 +8,11 @@ import static net.pincette.mongo.streams.Pipeline.DELETE;
 import static net.pincette.mongo.streams.Util.matchFields;
 import static net.pincette.mongo.streams.Util.matchQuery;
 import static net.pincette.mongo.streams.Util.tryForever;
-import static net.pincette.rs.Box.box;
 import static net.pincette.rs.Filter.filter;
 import static net.pincette.rs.Mapper.map;
+import static net.pincette.rs.Pipe.pipe;
+import static net.pincette.rs.Util.onCancelProcessor;
+import static net.pincette.rs.Util.onCompleteProcessor;
 import static net.pincette.util.Util.must;
 
 import com.mongodb.client.result.DeleteResult;
@@ -20,6 +22,7 @@ import java.util.concurrent.Flow.Processor;
 import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.rs.streams.Message;
+import net.pincette.util.State;
 import org.bson.Document;
 
 /**
@@ -40,12 +43,12 @@ class Delete {
     final MongoCollection<Document> collection =
         context.database.getCollection(expr.getString(FROM));
     final Set<String> fields = matchFields(expr, null);
+    final State<Boolean> stop = new State<>(false);
 
     assert !fields.isEmpty();
 
-    return box(
-        map(
-            m ->
+    return pipe(map(
+            (Message<String, JsonObject> m) ->
                 m.withValue(
                     matchQuery(m.value, fields)
                         .map(
@@ -57,10 +60,13 @@ class Delete {
                                                 result ->
                                                     must(result, DeleteResult::wasAcknowledged)),
                                     DELETE,
+                                    stop::get,
                                     () -> "Collection " + collection + ", delete: " + string(query),
                                     context))
                         .map(result -> m.value)
-                        .orElse(null))),
-        filter(m -> m.value != null));
+                        .orElse(null))))
+        .then(filter(m -> m.value != null))
+        .then(onCancelProcessor(() -> stop.set(true)))
+        .then(onCompleteProcessor(() -> stop.set(true)));
   }
 }

@@ -13,6 +13,7 @@ import static net.pincette.netty.http.TestUtil.resourceHandler;
 import static net.pincette.netty.http.Util.simpleResponse;
 import static net.pincette.rs.streams.Message.message;
 import static net.pincette.util.ScheduledCompletionStage.runAsyncAfter;
+import static net.pincette.util.Util.initLogging;
 import static net.pincette.util.Util.tryToDoRethrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -27,12 +28,18 @@ import net.pincette.netty.http.RequestHandlerAccumulated;
 import net.pincette.rs.Source;
 import net.pincette.rs.streams.Message;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class TestHttp extends Base {
   private HttpServer server;
+
+  @BeforeAll
+  static void beforeAll() {
+    initLogging();
+  }
 
   private static List<Message<String, JsonObject>> output(final String name) {
     return read(resource(name, "output.json")).stream()

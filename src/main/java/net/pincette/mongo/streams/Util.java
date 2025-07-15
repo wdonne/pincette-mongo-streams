@@ -3,6 +3,7 @@ package net.pincette.mongo.streams;
 import static java.time.Duration.ofSeconds;
 import static java.util.Collections.emptySet;
 import static java.util.Optional.ofNullable;
+import static java.util.concurrent.CompletableFuture.completedStage;
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Logger.getLogger;
 import static java.util.stream.Collectors.toSet;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import javax.json.JsonObject;
@@ -127,15 +129,20 @@ class Util {
   static <T> CompletionStage<T> tryForever(
       final SupplierWithException<CompletionStage<T>> run,
       final String stage,
+      final BooleanSupplier stop,
       final Context context) {
-    return tryForever(run, stage, null, context);
+    return tryForever(run, stage, stop, null, context);
   }
 
   static <T> CompletionStage<T> tryForever(
       final SupplierWithException<CompletionStage<T>> run,
       final String stage,
+      final BooleanSupplier stop,
       final Supplier<String> message,
       final Context context) {
-    return tryToGetForever(run, RETRY, e -> exceptionLogger(e, stage, message, context));
+    return tryToGetForever(
+        () -> stop.getAsBoolean() ? completedStage(null) : run.get(),
+        RETRY,
+        e -> exceptionLogger(e, stage, message, context));
   }
 }

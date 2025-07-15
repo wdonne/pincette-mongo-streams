@@ -41,6 +41,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow.Processor;
 import java.util.concurrent.Flow.Publisher;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import javax.json.JsonArray;
 import javax.json.JsonArrayBuilder;
@@ -48,6 +49,7 @@ import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.mongo.Features;
 import net.pincette.rs.streams.Message;
+import net.pincette.util.State;
 
 /**
  * The <code>$lookup</code> operator.
@@ -80,7 +82,10 @@ class Lookup {
   }
 
   private static CompletionStage<JsonArrayBuilder> lookup(
-      final String collection, final JsonArray query, final Context context) {
+      final String collection,
+      final JsonArray query,
+      final BooleanSupplier stop,
+      final Context context) {
     return tryForever(
         () ->
             aggregate(context.database.getCollection(collection), query)
@@ -89,6 +94,7 @@ class Lookup {
                         list.stream()
                             .reduce(createArrayBuilder(), JsonArrayBuilder::add, (b1, b2) -> b1)),
         LOOKUP,
+        stop,
         () -> logLookup(collection, query),
         context);
   }
@@ -132,6 +138,7 @@ class Lookup {
     final boolean inner = expr.getBoolean(INNER, false);
     final Context localContext = getDatabase(expr).map(context::withDatabase).orElse(context);
     final Function<JsonObject, JsonArray> queryFunction = queryFunction(expr, context);
+    final State<Boolean> stop = new State<>(false);
     final boolean unwind = expr.getBoolean(UNWIND, false);
 
     return unwind
@@ -141,7 +148,7 @@ class Lookup {
                     m, lookupPublisher(from, queryFunction.apply(m.value), localContext), as))
         : pipe(mapAsyncSequential(
                 (Message<String, JsonObject> m) ->
-                    lookup(from, queryFunction.apply(m.value), localContext)
+                    lookup(from, queryFunction.apply(m.value), stop::get, localContext)
                         .thenApply(builder -> pair(m, builder))))
             .then(
                 map(

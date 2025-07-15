@@ -13,13 +13,33 @@ import net.pincette.rs.streams.Message;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-class TestJslt extends Base {
+class TestScript extends Base {
+  private void jq(final String script) {
+    script(script, "$jq");
+  }
+
   private void jslt(final String script) {
+    script(script, "$jslt");
+  }
+
+  private void script(final String script, final String stage) {
     final List<Message<String, JsonObject>> result =
-        runTest(a(o(f("$jslt", v(script)))), list(o(f(ID, v("0")), f("test", v(0)))));
+        runTest(a(o(f(stage, v(script)))), list(o(f(ID, v("0")), f("test", v(0)))));
 
     assertEquals(1, result.size());
     assertEquals(o(f(ID, v("0")), f("test", v(1))), result.get(0).value);
+  }
+
+  @Test
+  @DisplayName("$jq 1")
+  void jq1() {
+    jq("resource:/test.jq");
+  }
+
+  @Test
+  @DisplayName("$jq 2")
+  void jq2() {
+    jq(". + {test: 1}");
   }
 
   @Test
@@ -31,6 +51,6 @@ class TestJslt extends Base {
   @Test
   @DisplayName("$jslt 2")
   void jslt2() {
-    jslt("{\"test\": 1, *: ." + "}");
+    jslt("{\"test\": 1, *: .}");
   }
 }
