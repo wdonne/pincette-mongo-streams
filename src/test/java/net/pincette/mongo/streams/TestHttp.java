@@ -15,12 +15,14 @@ import static net.pincette.rs.streams.Message.message;
 import static net.pincette.util.ScheduledCompletionStage.runAsyncAfter;
 import static net.pincette.util.Util.initLogging;
 import static net.pincette.util.Util.tryToDoRethrow;
+import static net.pincette.util.Util.tryToGetWithRethrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.ByteArrayOutputStream;
 import java.util.List;
 import javax.json.JsonArray;
 import javax.json.JsonObject;
+import javax.json.JsonReader;
 import javax.json.JsonValue;
 import net.pincette.json.JsonUtil;
 import net.pincette.netty.http.HttpServer;
@@ -67,7 +69,9 @@ class TestHttp extends Base {
   }
 
   private static JsonArray read(final String resource) {
-    return createReader(TestHttp.class.getResourceAsStream(resource)).readArray();
+    return tryToGetWithRethrow(
+            () -> createReader(TestHttp.class.getResourceAsStream(resource)), JsonReader::readArray)
+        .orElse(null);
   }
 
   private static String resource(final String test, final String name) {

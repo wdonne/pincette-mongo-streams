@@ -1,6 +1,7 @@
 package net.pincette.mongo.streams;
 
 import static com.mongodb.client.model.Filters.eq;
+import static java.lang.Boolean.FALSE;
 import static java.time.Duration.ofMillis;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static net.pincette.json.Factory.a;
@@ -31,7 +32,8 @@ class TestDelete extends Base {
   private static CompletionStage<Boolean> waitUntilGone(
       final Supplier<CompletionStage<Boolean>> fn) {
     return composeAsyncAfter(fn, ofMillis(100))
-        .thenComposeAsync(result -> !result ? completedFuture(false) : waitUntilGone(fn));
+        .thenComposeAsync(result -> FALSE.equals(result) ? completedFuture(false) :
+            waitUntilGone(fn));
   }
 
   private void delete(final JsonObject message, final JsonValue fields) {
