@@ -44,7 +44,7 @@ class Bucket {
 
   private static JsonArrayBuilder branches(final JsonValue expression, final JsonArray boundaries) {
     return slide(boundaries.stream(), 2)
-        .map(list -> createCase(expression, list.get(0), list.get(1)))
+        .map(list -> createCase(expression, list.getFirst(), list.get(1)))
         .reduce(createArrayBuilder(), JsonArrayBuilder::add, (b1, b2) -> b1);
   }
 
@@ -67,7 +67,8 @@ class Bucket {
   }
 
   private static boolean ordered(final JsonArray boundaries) {
-    return slide(boundaries.stream(), 2).allMatch(list -> compare(list.get(0), list.get(1)) < 0);
+    return slide(boundaries.stream(), 2)
+        .allMatch(list -> compare(list.getFirst(), list.get(1)) < 0);
   }
 
   static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(

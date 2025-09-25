@@ -50,7 +50,7 @@ class TestMerge extends Base {
             list(MESSAGE1));
 
     assertEquals(1, result.size());
-    assertEquals(MESSAGE1, result.get(0).value);
+    assertEquals(MESSAGE1, result.getFirst().value);
     assertEquals(
         MESSAGE1,
         findOne(resources.database.getCollection(COLLECTION), eq(ID, "0"))
@@ -159,7 +159,7 @@ class TestMerge extends Base {
             list(NEW_MESSAGE));
 
     assertEquals(1, result.size());
-    assertEquals(expected, result.get(0).value);
+    assertEquals(expected, result.getFirst().value);
     assertEquals(
         expected,
         findOne(

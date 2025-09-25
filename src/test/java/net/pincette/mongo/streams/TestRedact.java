@@ -63,6 +63,6 @@ class TestRedact extends Base {
                 a(
                     o(f("test", v(0)), f("v", v(0))),
                     o(f("test", v(1)), f("v", v(0)), f("sub", o(f("test", v(2)))))))),
-        result.get(0).value);
+        result.getFirst().value);
   }
 }

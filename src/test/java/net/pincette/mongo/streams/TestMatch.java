@@ -23,6 +23,6 @@ class TestMatch extends Base {
             list(o(f(ID, v("0")), f("test", v(0))), o(f(ID, v("1")), f("test", v(1)))));
 
     assertEquals(1, result.size());
-    assertEquals(o(f(ID, v("0")), f("test", v(0))), result.get(0).value);
+    assertEquals(o(f(ID, v("0")), f("test", v(0))), result.getFirst().value);
   }
 }

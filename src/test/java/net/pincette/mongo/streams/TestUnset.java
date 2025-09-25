@@ -24,7 +24,7 @@ class TestUnset extends Base {
         runTest(a(o(f("$unset", v("test1")))), MESSAGES);
 
     assertEquals(1, result.size());
-    assertEquals(o(f(ID, v("0")), f("test2", o(f("test", v(0))))), result.get(0).value);
+    assertEquals(o(f(ID, v("0")), f("test2", o(f("test", v(0))))), result.getFirst().value);
   }
 
   @Test
@@ -34,6 +34,6 @@ class TestUnset extends Base {
         runTest(a(o(f("$unset", a(v("test1"), v("test2.test"))))), MESSAGES);
 
     assertEquals(1, result.size());
-    assertEquals(o(f(ID, v("0")), f("test2", o())), result.get(0).value);
+    assertEquals(o(f(ID, v("0")), f("test2", o())), result.getFirst().value);
   }
 }

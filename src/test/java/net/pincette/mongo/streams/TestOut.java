@@ -25,7 +25,7 @@ class TestOut extends Base {
         runTest(a(o(f("$out", v("pincette-mongo-streams-test")))), list(message));
 
     assertEquals(1, result.size());
-    assertEquals(message, result.get(0).value);
+    assertEquals(message, result.getFirst().value);
     assertEquals(
         message,
         findOne(resources.database.getCollection("pincette-mongo-streams-test"), eq(ID, "0"))

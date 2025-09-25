@@ -160,7 +160,7 @@ class TestGroup extends Base {
             list(o(f("test", v(null)))));
 
     assertEquals(1, result.size());
-    assertEquals(o(f(ID, v(null)), f("merged", o())), result.get(0).value);
+    assertEquals(o(f(ID, v(null)), f("merged", o())), result.getFirst().value);
   }
 
   @Test

@@ -33,7 +33,7 @@ class TestProject extends Base {
             MESSAGES);
 
     assertEquals(1, result.size());
-    assertEquals(o(f(ID, v("0")), f("test1", v(0)), f("test2", v(0))), result.get(0).value);
+    assertEquals(o(f(ID, v("0")), f("test1", v(0)), f("test2", v(0))), result.getFirst().value);
   }
 
   @Test
@@ -59,7 +59,7 @@ class TestProject extends Base {
             f("test2", v(0)),
             f("test3", o(f("test1", v(0)))),
             f("test4", o(f("test1", v(0)), f("test2", v(0))))),
-        result.get(0).value);
+        result.getFirst().value);
   }
 
   @Test
@@ -95,7 +95,7 @@ class TestProject extends Base {
         runTest(a(o(f("$project", o(f("test1", v(1)), f("test2", v(true)))))), MESSAGES);
 
     assertEquals(1, result.size());
-    assertEquals(o(f(ID, v("0")), f("test1", v(0)), f("test2", v(0))), result.get(0).value);
+    assertEquals(o(f(ID, v("0")), f("test1", v(0)), f("test2", v(0))), result.getFirst().value);
   }
 
   @Test
@@ -105,7 +105,7 @@ class TestProject extends Base {
         runTest(a(o(f("$project", o(f("test1", v(1)), f(ID, v(false)))))), MESSAGES);
 
     assertEquals(1, result.size());
-    assertEquals(o(f("test1", v(0))), result.get(0).value);
+    assertEquals(o(f("test1", v(0))), result.getFirst().value);
   }
 
   @Test
@@ -134,6 +134,6 @@ class TestProject extends Base {
             f("test3", o(f("test1", v(0)), f("test2", v(0)))),
             f("test4", o(f("test1", v(0)), f("test2", v(10)), f("test3", v(10)))),
             f("test5", o(f("test", v(0))))),
-        result.get(0).value);
+        result.getFirst().value);
   }
 }

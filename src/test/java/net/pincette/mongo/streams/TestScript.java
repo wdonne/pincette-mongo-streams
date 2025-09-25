@@ -27,7 +27,7 @@ class TestScript extends Base {
         runTest(a(o(f(stage, v(script)))), list(o(f(ID, v("0")), f("test", v(0)))));
 
     assertEquals(1, result.size());
-    assertEquals(o(f(ID, v("0")), f("test", v(1))), result.get(0).value);
+    assertEquals(o(f(ID, v("0")), f("test", v(1))), result.getFirst().value);
   }
 
   @Test

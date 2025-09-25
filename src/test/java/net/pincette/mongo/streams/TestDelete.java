@@ -32,8 +32,8 @@ class TestDelete extends Base {
   private static CompletionStage<Boolean> waitUntilGone(
       final Supplier<CompletionStage<Boolean>> fn) {
     return composeAsyncAfter(fn, ofMillis(100))
-        .thenComposeAsync(result -> FALSE.equals(result) ? completedFuture(false) :
-            waitUntilGone(fn));
+        .thenComposeAsync(
+            result -> FALSE.equals(result) ? completedFuture(false) : waitUntilGone(fn));
   }
 
   private void delete(final JsonObject message, final JsonValue fields) {
@@ -51,7 +51,7 @@ class TestDelete extends Base {
             list(message));
 
     assertEquals(1, result.size());
-    assertEquals(message, result.get(0).value);
+    assertEquals(message, result.getFirst().value);
     assertFalse(
         waitUntilGone(() -> findOne(collection, eq(ID, "0")).thenApply(Optional::isPresent))
             .toCompletableFuture()

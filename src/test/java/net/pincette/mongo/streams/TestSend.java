@@ -33,6 +33,6 @@ class TestSend extends Base {
 
     assertEquals(0, result.size());
     assertEquals(1, sent.size());
-    assertEquals(message, sent.get(0));
+    assertEquals(message, sent.getFirst());
   }
 }

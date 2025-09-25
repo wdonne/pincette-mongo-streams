@@ -30,7 +30,7 @@ import org.junit.jupiter.api.BeforeAll;
 public class Base {
   static final String APP = "pincette-mongo-streams";
   static final String ID = "_id";
-  protected static Resources resources;
+  static Resources resources;
 
   @AfterAll
   static void after() {

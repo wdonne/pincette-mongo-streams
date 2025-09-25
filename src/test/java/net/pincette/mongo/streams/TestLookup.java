@@ -67,7 +67,7 @@ class TestLookup extends Base {
 
     return Optional.of(result)
         .filter(r -> !r.isEmpty())
-        .map(r -> r.get(0).value)
+        .map(r -> r.getFirst().value)
         .map(
             json ->
                 copy(json, createObjectBuilder())
@@ -94,7 +94,7 @@ class TestLookup extends Base {
 
     assertEquals(1, result.size());
 
-    final JsonObject json = result.get(0).value;
+    final JsonObject json = result.getFirst().value;
 
     return copy(json, createObjectBuilder()).add(OTHER, sort(json.getJsonArray(OTHER))).build();
   }

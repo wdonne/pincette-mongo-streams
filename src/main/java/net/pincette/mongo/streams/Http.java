@@ -371,7 +371,7 @@ class Http {
       final Publisher<JsonObject> responseBody) {
     return reduce(responseBody, JsonUtil::createArrayBuilder, JsonArrayBuilder::add)
         .thenApply(JsonArrayBuilder::build)
-        .thenApply(array -> array.size() == 1 ? array.get(0).asJsonObject() : array);
+        .thenApply(array -> array.size() == 1 ? array.getFirst().asJsonObject() : array);
   }
 
   private static CompletionStage<JsonValue> reduceResponseBodyText(

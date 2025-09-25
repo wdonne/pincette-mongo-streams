@@ -24,7 +24,7 @@ class TestSetKey extends Base {
         runTest(a(o(f("$setKey", v("$test")))), MESSAGES);
 
     assertEquals(1, result.size());
-    assertEquals(MESSAGE, result.get(0).value);
-    assertEquals("1", result.get(0).key);
+    assertEquals(MESSAGE, result.getFirst().value);
+    assertEquals("1", result.getFirst().key);
   }
 }

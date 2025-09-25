@@ -23,7 +23,7 @@ class TestReplaceWith extends Base {
             list(o(f(ID, v("0")), f("test", o(f("test", o(f(ID, v("1")), f("test", v(0)))))))));
 
     assertEquals(1, result.size());
-    assertEquals(o(f(ID, v("1")), f("test", v(0))), result.get(0).value);
-    assertEquals("1", result.get(0).key);
+    assertEquals(o(f(ID, v("1")), f("test", v(0))), result.getFirst().value);
+    assertEquals("1", result.getFirst().key);
   }
 }
