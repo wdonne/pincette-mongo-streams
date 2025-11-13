@@ -16,6 +16,7 @@ import static net.pincette.mongo.Collection.findOne;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.streams.Pipeline.DEDUPLICATE;
 import static net.pincette.mongo.streams.Util.ID;
+import static net.pincette.mongo.streams.Util.TIMESTAMP;
 import static net.pincette.mongo.streams.Util.tryForever;
 import static net.pincette.rs.Async.mapAsyncSequential;
 import static net.pincette.rs.Commit.commit;
@@ -46,8 +47,8 @@ import net.pincette.mongo.BsonUtil;
 import net.pincette.rs.streams.Message;
 import net.pincette.util.Pair;
 import net.pincette.util.State;
+import org.bson.BsonDateTime;
 import org.bson.BsonDocument;
-import org.bson.BsonInt64;
 import org.bson.BsonValue;
 import org.bson.Document;
 import org.bson.conversions.Bson;
@@ -62,7 +63,6 @@ class Deduplicate {
   private static final String CACHE_WINDOW = "cacheWindow";
   private static final String COLLECTION = "collection";
   private static final String EXPRESSION = "expression";
-  private static final String TIMESTAMP = "_timestamp";
 
   private Deduplicate() {}
 
@@ -141,7 +141,7 @@ class Deduplicate {
   private static UpdateOneModel<Document> updateObject(final BsonValue value) {
     return new UpdateOneModel<>(
         eq(ID, value),
-        combine(set(ID, value), set(TIMESTAMP, new BsonInt64(now().toEpochMilli()))),
+        combine(set(ID, value), set(TIMESTAMP, new BsonDateTime(now().toEpochMilli()))),
         new UpdateOptions().upsert(true));
   }
 }

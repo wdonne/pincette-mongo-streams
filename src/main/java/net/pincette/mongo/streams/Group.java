@@ -6,6 +6,7 @@ import static java.lang.Math.sqrt;
 import static java.lang.String.valueOf;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.security.MessageDigest.getInstance;
+import static java.time.Instant.now;
 import static java.util.Optional.ofNullable;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static java.util.logging.Level.INFO;
@@ -31,12 +32,15 @@ import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.json.JsonUtil.isString;
 import static net.pincette.json.JsonUtil.string;
 import static net.pincette.json.JsonUtil.toNative;
+import static net.pincette.mongo.BsonUtil.isoDateJson;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.JsonClient.findOne;
 import static net.pincette.mongo.JsonClient.update;
 import static net.pincette.mongo.Util.compare;
 import static net.pincette.mongo.streams.Util.ID;
+import static net.pincette.mongo.streams.Util.TIMESTAMP;
 import static net.pincette.mongo.streams.Util.generateKey;
+import static net.pincette.rs.Async.mapAsyncSequential;
 import static net.pincette.rs.Filter.filter;
 import static net.pincette.rs.Mapper.map;
 import static net.pincette.rs.Pipe.pipe;
@@ -52,6 +56,7 @@ import java.security.MessageDigest;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow.Processor;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
@@ -118,6 +123,10 @@ class Group {
 
   private Group() {}
 
+  private static JsonObject addTimestamp(final JsonObject json) {
+    return createObjectBuilder(json).add(TIMESTAMP, isoDateJson(now())).build();
+  }
+
   private static Operator addToSet(final JsonValue expression, final Features features) {
     final Function<JsonObject, JsonValue> function = expression(expression, features);
 
@@ -153,7 +162,7 @@ class Group {
         .build();
   }
 
-  private static BiFunction<JsonValue, JsonObject, JsonObject> aggregator(
+  private static BiFunction<JsonValue, JsonObject, CompletionStage<JsonObject>> aggregator(
       final JsonObject expression,
       final MongoCollection<Document> collection,
       final Context context) {
@@ -163,6 +172,7 @@ class Group {
     return (key, json) ->
         findOne(collection, eq(ID, toNative(key)))
             .thenApply(current -> current.orElseGet(JsonUtil::emptyObject))
+            .thenApply(Group::removeTimestamp)
             .thenComposeAsync(
                 current ->
                     Optional.of(aggregate(current, key, json, operators))
@@ -170,12 +180,10 @@ class Group {
                             newCurrent -> !createDiff(current, newCurrent).toJsonArray().isEmpty())
                         .map(
                             newCurrent ->
-                                update(collection, newCurrent)
+                                update(collection, addTimestamp(newCurrent))
                                     .thenApply(result -> must(result, r -> r))
                                     .thenApply(result -> select(newCurrent, selectors)))
-                        .orElse(completedFuture(null)))
-            .toCompletableFuture()
-            .join();
+                        .orElse(completedFuture(null)));
   }
 
   private static Operator avg(final JsonValue expression, final Features features) {
@@ -366,6 +374,10 @@ class Group {
             .orElse((JsonArray) current);
   }
 
+  private static JsonObject removeTimestamp(final JsonObject json) {
+    return createObjectBuilder(json).remove(TIMESTAMP).build();
+  }
+
   private static JsonObject select(
       final JsonObject current, final Map<String, Selector> selectors) {
     return current.entrySet().stream()
@@ -398,7 +410,7 @@ class Group {
     final String collection =
         ofNullable(expr.getString(COLLECTION, null))
             .orElseGet(() -> context.app + "-" + digest(expression));
-    final BiFunction<JsonValue, JsonObject, JsonObject> aggregator =
+    final BiFunction<JsonValue, JsonObject, CompletionStage<JsonObject>> aggregator =
         aggregator(expr, context.database.getCollection(collection), context);
     final JsonValue groupExpression = expr.getValue("/" + ID);
     final Function<JsonObject, JsonValue> key =
@@ -410,7 +422,10 @@ class Group {
 
     return pipe(Mapper.<Message<String, JsonObject>, Pair<JsonValue, JsonObject>>map(
             m -> pair(key.apply(m.value), m.value)))
-        .then(map(pair -> pair(pair.first, aggregator.apply(pair.first, pair.second))))
+        .then(
+            mapAsyncSequential(
+                pair ->
+                    aggregator.apply(pair.first, pair.second).thenApply(v -> pair(pair.first, v))))
         .then(filter(pair -> pair.second != null && hasId(pair.second)))
         .then(map(pair -> message(generateKey(pair.first), pair.second)));
   }

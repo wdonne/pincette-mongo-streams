@@ -42,6 +42,7 @@ import net.pincette.util.Pair;
 class Util {
   static final String ID = "_id";
   static final Logger LOGGER = getLogger("net.pincette.mongo.streams");
+  static final String TIMESTAMP = "_timestamp";
 
   static final Duration RETRY = ofSeconds(5);
   private static final String AND = "$and";
