@@ -5,3 +5,5 @@ This small library allows you to write JSON data streaming pipelines using [Mong
 [JSLT](https://github.com/schibsted/jslt) stage, which is useful for transformations that would be too complicated with the MongoDB language alone.
 
 The details are documented in the [API documentation](https://www.javadoc.io/doc/net.pincette/pincette-mongo-streams/latest/index.html).
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/wdonne/pincette-mongo-streams)
