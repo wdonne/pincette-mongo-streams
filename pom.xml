@@ -7,7 +7,7 @@
   <groupId>net.pincette</groupId>
   <artifactId>pincette-mongo-streams</artifactId>
   <packaging>jar</packaging>
-  <version>3.3.8</version>
+  <version>3.3.9</version>
   <name>pincette-mongo-streams</name>
   <description>MongoDB Utilities</description>
   <url>https://github.com/wdonne/pincette-mongo-streams</url>
@@ -77,7 +77,7 @@
     <dependency>
       <groupId>net.pincette</groupId>
       <artifactId>pincette-rs-json</artifactId>
-      <version>1.0.28</version>
+      <version>1.0.29</version>
     </dependency>
     <dependency>
       <groupId>net.pincette</groupId>
