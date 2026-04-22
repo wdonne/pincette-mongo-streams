@@ -1,5 +1,6 @@
 package net.pincette.mongo.streams;
 
+import static javax.json.JsonValue.NULL;
 import static net.pincette.json.Factory.a;
 import static net.pincette.json.Factory.f;
 import static net.pincette.json.Factory.o;
@@ -73,6 +74,27 @@ class TestAddFields extends Base {
         runTest(
             a(o(f("$addFields", o(f("test3.test1.test2", v(3)))))),
             list(o(f(ID, v("0")), f("test1", v(0)), f("test3", o(f("test", v(0)))))));
+
+    assertEquals(1, result.size());
+    assertEquals(
+        o(
+            f(ID, v("0")),
+            f("test1", v(0)),
+            f("test3", o(f("test", v(0)), f("test1", o(f("test2", v(3))))))),
+        result.getFirst().value);
+  }
+
+  @Test
+  @DisplayName("$addFields 4")
+  void addFields4() {
+    final List<Message<String, JsonObject>> result =
+        runTest(
+            a(o(f("$addFields", o(f("test3.test1.test2", v(3)))))),
+            list(
+                o(
+                    f(ID, v("0")),
+                    f("test1", v(0)),
+                    f("test3", o(f("test", v(0)), f("test1", v(NULL)))))));
 
     assertEquals(1, result.size());
     assertEquals(

@@ -22,6 +22,7 @@ import javax.json.JsonValue;
 import net.pincette.json.Transform.JsonEntry;
 import net.pincette.json.Transform.Transformer;
 import net.pincette.rs.streams.Message;
+import net.pincette.util.Array;
 
 /**
  * The <code>$addFields</code> operator.
@@ -41,8 +42,12 @@ class AddFields {
         transform(
             json,
             new Transformer(
-                e -> newValues.containsKey(e.path),
-                e -> Optional.of(new JsonEntry(e.path, newValues.remove(e.path))))),
+                    e -> newValues.containsKey(e.path),
+                    e -> Optional.of(new JsonEntry(e.path, newValues.remove(e.path))))
+                .thenApply(
+                    new Transformer(
+                        e -> !isObject(e.value) && hasPrefix(newValues, e.path),
+                        e -> Optional.empty()))),
         newValues);
   }
 
@@ -60,6 +65,12 @@ class AddFields {
 
   private static JsonObject escapeDot(final JsonObject json) {
     return transformFieldNames(json, f -> f.replace(".", DOT)).build();
+  }
+
+  private static boolean hasPrefix(final Map<String, JsonValue> newValues, final String path) {
+    final String[] pathSegments = path.split("\\.");
+
+    return newValues.keySet().stream().anyMatch(k -> Array.hasPrefix(k.split("\\."), pathSegments));
   }
 
   static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
