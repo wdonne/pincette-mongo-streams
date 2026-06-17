@@ -140,6 +140,18 @@ class TestHttp extends Base {
     runHttpTest("http9");
   }
 
+  @Test
+  @DisplayName("$http 10")
+  void http10() {
+    runHttpTest("http10");
+  }
+
+  @Test
+  @DisplayName("$http 11")
+  void http11() {
+    runHttpTest("http11");
+  }
+
   private void runHttpTest(final String name) {
     assertEquals(
         output(name),
