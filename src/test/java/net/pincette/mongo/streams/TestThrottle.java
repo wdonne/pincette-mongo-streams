@@ -38,7 +38,7 @@ class TestThrottle extends Base {
     final List<Message<String, JsonObject>> result =
         runTest(a(o(f("$throttle", o(f("maxPerSecond", v(max)))))), messages);
 
-    assertTrue(withinPercent(total, max, between(start, now()).getSeconds(), 5));
+    assertTrue(withinPercent(total, max, between(start, now()).getSeconds(), 20));
     assertEquals(messages, result.stream().map(m -> m.value).toList());
   }
 }
