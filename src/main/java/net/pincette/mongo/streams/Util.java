@@ -1,9 +1,7 @@
 package net.pincette.mongo.streams;
 
-import static java.time.Duration.ofSeconds;
 import static java.util.Collections.emptySet;
 import static java.util.Optional.ofNullable;
-import static java.util.concurrent.CompletableFuture.completedStage;
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Logger.getLogger;
 import static java.util.stream.Collectors.toSet;
@@ -16,21 +14,16 @@ import static net.pincette.json.JsonUtil.toJsonPointer;
 import static net.pincette.json.JsonUtil.toNative;
 import static net.pincette.util.Collections.set;
 import static net.pincette.util.Pair.pair;
-import static net.pincette.util.Util.tryToGetForever;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletionStage;
-import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonString;
 import javax.json.JsonValue;
-import net.pincette.function.SupplierWithException;
 import net.pincette.json.JsonUtil;
 import net.pincette.util.Pair;
 
@@ -44,7 +37,6 @@ class Util {
   static final Logger LOGGER = getLogger("net.pincette.mongo.streams");
   static final String TIMESTAMP = "_timestamp";
 
-  static final Duration RETRY = ofSeconds(5);
   private static final String AND = "$and";
   private static final String EQ = "$eq";
   private static final String ON = "on";
@@ -125,25 +117,5 @@ class Util {
 
   private static Optional<JsonObject> matchQuerySingle(final JsonObject json, final String field) {
     return getValue(json, toJsonPointer(field)).map(value -> eq(field, value).build());
-  }
-
-  static <T> CompletionStage<T> tryForever(
-      final SupplierWithException<CompletionStage<T>> run,
-      final String stage,
-      final BooleanSupplier stop,
-      final Context context) {
-    return tryForever(run, stage, stop, null, context);
-  }
-
-  static <T> CompletionStage<T> tryForever(
-      final SupplierWithException<CompletionStage<T>> run,
-      final String stage,
-      final BooleanSupplier stop,
-      final Supplier<String> message,
-      final Context context) {
-    return tryToGetForever(
-        () -> stop.getAsBoolean() ? completedStage(null) : run.get(),
-        RETRY,
-        e -> exceptionLogger(e, stage, message, context));
   }
 }

@@ -17,22 +17,14 @@ import static net.pincette.json.JsonUtil.string;
 import static net.pincette.json.JsonUtil.stringValue;
 import static net.pincette.json.JsonUtil.toNative;
 import static net.pincette.mongo.Expression.function;
-import static net.pincette.mongo.streams.Pipeline.HTTP;
-import static net.pincette.mongo.streams.Util.RETRY;
-import static net.pincette.mongo.streams.Util.exceptionLogger;
-import static net.pincette.mongo.streams.Util.tryForever;
 import static net.pincette.rs.Async.mapAsyncSequential;
 import static net.pincette.rs.Chain.with;
 import static net.pincette.rs.Flatten.flatMap;
 import static net.pincette.rs.FlattenList.flattenList;
-import static net.pincette.rs.Pipe.pipe;
 import static net.pincette.rs.Reducer.reduce;
 import static net.pincette.rs.Util.completablePublisher;
 import static net.pincette.rs.Util.discard;
 import static net.pincette.rs.Util.lines;
-import static net.pincette.rs.Util.onCancelProcessor;
-import static net.pincette.rs.Util.onCompleteProcessor;
-import static net.pincette.rs.Util.retryPublisher;
 import static net.pincette.rs.json.Util.parseJson;
 import static net.pincette.util.Collections.set;
 import static net.pincette.util.ImmutableBuilder.create;
@@ -60,8 +52,6 @@ import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow.Processor;
 import java.util.concurrent.Flow.Publisher;
-import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -212,25 +202,8 @@ class Http {
   }
 
   private static Optional<CompletionStage<HttpResponse<Publisher<List<ByteBuffer>>>>> execute(
-      final HttpClient client,
-      final Supplier<Optional<HttpRequest>> request,
-      final BooleanSupplier stop,
-      final Context context) {
-    final State<String> message = new State<>();
-
-    return request
-        .get()
-        .map(
-            r ->
-                tryForever(
-                    () ->
-                        SideEffect.<CompletionStage<HttpResponse<Publisher<List<ByteBuffer>>>>>run(
-                                () -> message.set(r.method() + " of " + r.uri()))
-                            .andThenGet(() -> client.sendAsync(r, ofPublisher())),
-                    HTTP,
-                    stop,
-                    message::get,
-                    context));
+      final HttpClient client, final Supplier<Optional<HttpRequest>> request) {
+    return request.get().map(r -> client.sendAsync(r, ofPublisher()));
   }
 
   private static Function<
@@ -240,15 +213,46 @@ class Http {
           final Function<JsonObject, JsonValue> url,
           final Function<JsonObject, JsonValue> method,
           final Function<JsonObject, JsonValue> headers,
-          final Function<JsonObject, JsonValue> requestBody,
-          final BooleanSupplier stop,
-          final Context context) {
+          final Function<JsonObject, JsonValue> requestBody) {
     return json ->
         execute(
             client.get(),
-            () -> requestInput(json, url, method, headers, requestBody).map(Http::createRequest),
-            stop,
-            context);
+            () -> requestInput(json, url, method, headers, requestBody).map(Http::createRequest));
+  }
+
+  private static Function<Message<String, JsonObject>, CompletionStage<Message<String, JsonObject>>>
+      executeFunction(
+          final Function<
+                  JsonObject, Optional<CompletionStage<HttpResponse<Publisher<List<ByteBuffer>>>>>>
+              execute,
+          final String as) {
+    return message ->
+        execute
+            .apply(message.value)
+            .map(
+                response ->
+                    response
+                        .thenComposeAsync(r -> addResponseBody(message.value, r, as))
+                        .thenApply(message::withValue))
+            .orElseGet(() -> completedFuture(message.withValue(addBadRequest(message.value))));
+  }
+
+  private static Function<Message<String, JsonObject>, Publisher<Message<String, JsonObject>>>
+      executeUnwindFunction(
+          final Function<
+                  JsonObject, Optional<CompletionStage<HttpResponse<Publisher<List<ByteBuffer>>>>>>
+              execute,
+          final String as) {
+    return message ->
+        completablePublisher(
+            () ->
+                execute
+                    .apply(message.value)
+                    .map(response -> response.thenApply(r -> transform(message, r, as)))
+                    .orElseGet(
+                        () ->
+                            completedFuture(
+                                Source.of(message.withValue(addBadRequest(message.value))))));
   }
 
   private static Supplier<HttpClient> getClient(
@@ -351,10 +355,6 @@ class Http {
     return response.statusCode() < 300;
   }
 
-  private static Consumer<Throwable> onException(final Context context) {
-    return e -> exceptionLogger(e, HTTP, e::getMessage, context);
-  }
-
   private static CompletionStage<JsonValue> reducedResponseBody(
       final HttpResponse<Publisher<List<ByteBuffer>>> response) {
     return Optional.of(response)
@@ -415,56 +415,6 @@ class Http {
         .get();
   }
 
-  private static Function<Message<String, JsonObject>, CompletionStage<Message<String, JsonObject>>>
-      retryExecute(
-          final Function<
-                  JsonObject, Optional<CompletionStage<HttpResponse<Publisher<List<ByteBuffer>>>>>>
-              execute,
-          final String as,
-          final BooleanSupplier stop,
-          final Context context) {
-    return message ->
-        tryForever(
-            () ->
-                execute
-                    .apply(message.value)
-                    .map(
-                        response ->
-                            response
-                                .thenComposeAsync(r -> addResponseBody(message.value, r, as))
-                                .thenApply(message::withValue))
-                    .orElseGet(
-                        () -> completedFuture(message.withValue(addBadRequest(message.value)))),
-            HTTP,
-            stop,
-            () -> null,
-            context);
-  }
-
-  private static Function<Message<String, JsonObject>, Publisher<Message<String, JsonObject>>>
-      retryExecuteUnwind(
-          final Function<
-                  JsonObject, Optional<CompletionStage<HttpResponse<Publisher<List<ByteBuffer>>>>>>
-              execute,
-          final String as,
-          final Context context) {
-    return message ->
-        retryPublisher(
-            () ->
-                completablePublisher(
-                    () ->
-                        execute
-                            .apply(message.value)
-                            .map(response -> response.thenApply(r -> transform(message, r, as)))
-                            .orElseGet(
-                                () ->
-                                    completedFuture(
-                                        Source.of(
-                                            message.withValue(addBadRequest(message.value)))))),
-            RETRY,
-            onException(context));
-  }
-
   private static JsonObject setContentType(final JsonObject headers, final JsonValue value) {
     final Supplier<String> tryJson = () -> isObject(value) || isArray(value) ? JSON : TEXT_PLAIN;
 
@@ -491,7 +441,6 @@ class Http {
 
     final String as = expr.getString(AS, null);
     final Supplier<HttpClient> client = getClient(expr, context);
-    final State<Boolean> stop = new State<>(false);
     final Function<JsonObject, Optional<CompletionStage<HttpResponse<Publisher<List<ByteBuffer>>>>>>
         execute =
             execute(
@@ -499,15 +448,11 @@ class Http {
                 function(expr.getValue("/" + URL), context.features),
                 function(expr.getValue("/" + METHOD), context.features),
                 getValue(expr, "/" + HEADERS).map(h -> function(h, context.features)).orElse(null),
-                getValue(expr, "/" + BODY).map(b -> function(b, context.features)).orElse(null),
-                stop::get,
-                context);
+                getValue(expr, "/" + BODY).map(b -> function(b, context.features)).orElse(null));
 
     return expr.getBoolean(UNWIND, false) && as != null
-        ? flatMap(retryExecuteUnwind(execute, as, context))
-        : pipe(mapAsyncSequential(retryExecute(execute, as, stop::get, context)))
-            .then(onCancelProcessor(() -> stop.set(true)))
-            .then(onCompleteProcessor(() -> stop.set(true)));
+        ? flatMap(executeUnwindFunction(execute, as))
+        : mapAsyncSequential(executeFunction(execute, as));
   }
 
   private static Publisher<Message<String, JsonObject>> transform(

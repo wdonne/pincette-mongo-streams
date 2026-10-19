@@ -3,10 +3,7 @@ package net.pincette.mongo.streams;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 import static net.pincette.json.JsonUtil.asString;
 import static net.pincette.json.JsonUtil.isObject;
-import static net.pincette.json.JsonUtil.string;
 import static net.pincette.mongo.Expression.function;
-import static net.pincette.mongo.streams.Pipeline.SEND;
-import static net.pincette.mongo.streams.Util.tryForever;
 import static net.pincette.rs.Async.mapAsyncSequential;
 import static net.pincette.rs.Filter.filter;
 import static net.pincette.rs.Pipe.pipe;
@@ -51,16 +48,10 @@ class Send {
                     .filter(JsonUtil::isString)
                     .map(
                         t ->
-                            tryForever(
-                                () ->
-                                    context
-                                        .producer
-                                        .apply(asString(t).getString(), m)
-                                        .thenApply(result -> m.withValue(null)),
-                                SEND,
-                                stop::get,
-                                () -> "Topic " + t + ", send: " + string(m.value),
-                                context))
+                            context
+                                .producer
+                                .apply(asString(t).getString(), m)
+                                .thenApply(result -> m.withValue(null)))
                     .orElseGet(() -> completedFuture(m))))
         .then(filter(m -> m.value != null))
         .then(onCancelProcessor(() -> stop.set(true)))

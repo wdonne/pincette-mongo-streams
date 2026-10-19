@@ -14,8 +14,6 @@ import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.JsonClient.findOne;
 import static net.pincette.mongo.JsonClient.insert;
 import static net.pincette.mongo.streams.Util.ID;
-import static net.pincette.mongo.streams.Util.RETRY;
-import static net.pincette.mongo.streams.Util.exceptionLogger;
 import static net.pincette.mongo.streams.Util.matchFields;
 import static net.pincette.mongo.streams.Util.matchQuery;
 import static net.pincette.rs.Async.mapAsyncSequential;
@@ -23,9 +21,7 @@ import static net.pincette.rs.Filter.filter;
 import static net.pincette.rs.Mapper.map;
 import static net.pincette.rs.Pipe.pipe;
 import static net.pincette.util.Pair.pair;
-import static net.pincette.util.ScheduledCompletionStage.composeAsyncAfter;
 import static net.pincette.util.Util.must;
-import static net.pincette.util.Util.rethrow;
 
 import com.mongodb.reactivestreams.client.MongoCollection;
 import java.util.Optional;
@@ -80,31 +76,13 @@ class Merge {
       final JsonValue key,
       final JsonObject query,
       final JsonObject expression,
-      final MongoCollection<Document> collection,
-      final Context context) {
+      final MongoCollection<Document> collection) {
     return findOne(collection, query)
         .thenComposeAsync(
             found ->
                 found
                     .map(f -> processExisting(fromStream, f, expression, collection))
-                    .orElseGet(() -> processNew(addId(fromStream, key), expression, collection)))
-        .exceptionally(
-            t -> {
-              exceptionLogger(t.getCause(), "$merge", context);
-
-              if (t.getCause() instanceof FailException) {
-                rethrow(t.getCause());
-              }
-
-              return null;
-            })
-        .thenComposeAsync(
-            value ->
-                value == null
-                    ? composeAsyncAfter(
-                        () -> process(fromStream, key, query, expression, collection, context),
-                        RETRY)
-                    : completedFuture(value));
+                    .orElseGet(() -> processNew(addId(fromStream, key), expression, collection)));
   }
 
   private static CompletionStage<JsonObject> processExisting(
@@ -171,8 +149,7 @@ class Merge {
                             key.apply(pair.first.value),
                             pair.second,
                             expr,
-                            collection,
-                            context)
+                            collection)
                         .thenApply(newValue -> setId(pair.first, newValue))))
         .then(filter(m -> !m.value.isEmpty()))
         .then(

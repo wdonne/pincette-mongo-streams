@@ -7,15 +7,12 @@ import static net.pincette.json.JsonUtil.isLong;
 import static net.pincette.json.JsonUtil.isObject;
 import static net.pincette.json.JsonUtil.isString;
 import static net.pincette.mongo.Expression.function;
-import static net.pincette.mongo.streams.Util.RETRY;
-import static net.pincette.mongo.streams.Util.exceptionLogger;
 import static net.pincette.rs.Box.box;
 import static net.pincette.rs.Filter.filter;
 import static net.pincette.rs.Mapper.map;
 import static net.pincette.util.Pair.pair;
 import static net.pincette.util.ScheduledCompletionStage.composeAsyncAfter;
 import static net.pincette.util.Util.must;
-import static net.pincette.util.Util.tryToGetForever;
 
 import java.util.Optional;
 import java.util.concurrent.Flow.Processor;
@@ -35,15 +32,15 @@ class Delay {
       final Message<String, JsonObject> message,
       final long duration,
       final String topic,
+      final Processor<Message<String, JsonObject>, Message<String, JsonObject>> next,
       final Context context) {
-    composeAsyncAfter(
-            () ->
-                tryToGetForever(
-                    () -> context.producer.apply(topic, message),
-                    RETRY,
-                    e -> exceptionLogger(e, "$delay", context)),
-            ofMillis(duration))
-        .thenApply(result -> must(result, r -> r));
+    composeAsyncAfter(() -> context.producer.apply(topic, message), ofMillis(duration))
+        .thenAccept(result -> must(result, r -> r))
+        .exceptionally(
+            t -> {
+              next.onError(t);
+              return null;
+            });
   }
 
   static Processor<Message<String, JsonObject>, Message<String, JsonObject>> stage(
@@ -53,6 +50,8 @@ class Delay {
     final JsonObject expr = expression.asJsonObject();
     final Function<JsonObject, JsonValue> duration =
         function(expr.getValue("/" + DURATION), context.features);
+    final Processor<Message<String, JsonObject>, Message<String, JsonObject>> filter =
+        filter(m -> m.value != null);
     final Function<JsonObject, JsonValue> topic =
         function(expr.getValue("/" + TOPIC), context.features);
 
@@ -69,9 +68,10 @@ class Delay {
                                             m,
                                             asLong(pair.first),
                                             asString(pair.second).getString(),
+                                            filter,
                                             context))
                                 .andThenGet(() -> m.withValue(null)))
                     .orElse(m)),
-        filter(m -> m.value != null));
+        filter);
   }
 }

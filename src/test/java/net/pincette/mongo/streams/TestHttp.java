@@ -3,7 +3,6 @@ package net.pincette.mongo.streams;
 import static io.netty.buffer.Unpooled.wrappedBuffer;
 import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.OK;
-import static java.time.Duration.ofSeconds;
 import static net.pincette.io.StreamConnector.copy;
 import static net.pincette.json.JsonUtil.createReader;
 import static net.pincette.json.JsonUtil.objects;
@@ -12,7 +11,6 @@ import static net.pincette.netty.http.HttpServer.accumulate;
 import static net.pincette.netty.http.TestUtil.resourceHandler;
 import static net.pincette.netty.http.Util.simpleResponse;
 import static net.pincette.rs.streams.Message.message;
-import static net.pincette.util.ScheduledCompletionStage.runAsyncAfter;
 import static net.pincette.util.Util.initLogging;
 import static net.pincette.util.Util.tryToDoRethrow;
 import static net.pincette.util.Util.tryToGetWithRethrow;
@@ -105,14 +103,6 @@ class TestHttp extends Base {
   @Test
   @DisplayName("$http 5")
   void http5() {
-    runHttpTest("http5");
-  }
-
-  @Test
-  @DisplayName("$http 5 recover")
-  void http5Recover() {
-    stopServer();
-    runAsyncAfter(this::startServer, ofSeconds(20));
     runHttpTest("http5");
   }
 

@@ -12,23 +12,17 @@ import static net.pincette.json.JsonUtil.createObjectBuilder;
 import static net.pincette.json.JsonUtil.createValue;
 import static net.pincette.json.JsonUtil.isArray;
 import static net.pincette.json.JsonUtil.isObject;
-import static net.pincette.json.JsonUtil.string;
 import static net.pincette.mongo.Expression.function;
 import static net.pincette.mongo.Expression.replaceVariables;
 import static net.pincette.mongo.JsonClient.aggregate;
 import static net.pincette.mongo.JsonClient.aggregationPublisher;
-import static net.pincette.mongo.streams.Pipeline.LOOKUP;
 import static net.pincette.mongo.streams.Pipeline.MATCH;
-import static net.pincette.mongo.streams.Util.RETRY;
-import static net.pincette.mongo.streams.Util.exceptionLogger;
-import static net.pincette.mongo.streams.Util.tryForever;
 import static net.pincette.rs.Async.mapAsyncSequential;
 import static net.pincette.rs.Chain.with;
 import static net.pincette.rs.Filter.filter;
 import static net.pincette.rs.Flatten.flatMap;
 import static net.pincette.rs.Mapper.map;
 import static net.pincette.rs.Pipe.pipe;
-import static net.pincette.rs.Util.retryPublisher;
 import static net.pincette.util.Collections.map;
 import static net.pincette.util.Pair.pair;
 import static net.pincette.util.Util.must;
@@ -41,7 +35,6 @@ import java.util.Optional;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Flow.Processor;
 import java.util.concurrent.Flow.Publisher;
-import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import javax.json.JsonArray;
 import javax.json.JsonArrayBuilder;
@@ -49,7 +42,6 @@ import javax.json.JsonObject;
 import javax.json.JsonValue;
 import net.pincette.mongo.Features;
 import net.pincette.rs.streams.Message;
-import net.pincette.util.State;
 
 /**
  * The <code>$lookup</code> operator.
@@ -77,34 +69,17 @@ class Lookup {
         .map(pair -> create(pair.first).getDatabase(pair.second));
   }
 
-  private static String logLookup(final String collection, final JsonArray query) {
-    return "Collection " + collection + ", lookup: " + string(query);
-  }
-
   private static CompletionStage<JsonArrayBuilder> lookup(
-      final String collection,
-      final JsonArray query,
-      final BooleanSupplier stop,
-      final Context context) {
-    return tryForever(
-        () ->
-            aggregate(context.database.getCollection(collection), query)
-                .thenApply(
-                    list ->
-                        list.stream()
-                            .reduce(createArrayBuilder(), JsonArrayBuilder::add, (b1, b2) -> b1)),
-        LOOKUP,
-        stop,
-        () -> logLookup(collection, query),
-        context);
+      final String collection, final JsonArray query, final Context context) {
+    return aggregate(context.database.getCollection(collection), query)
+        .thenApply(
+            list ->
+                list.stream().reduce(createArrayBuilder(), JsonArrayBuilder::add, (b1, b2) -> b1));
   }
 
   private static Publisher<JsonObject> lookupPublisher(
       final String collection, final JsonArray query, final Context context) {
-    return retryPublisher(
-        () -> aggregationPublisher(context.database.getCollection(collection), query),
-        RETRY,
-        e -> exceptionLogger(e, LOOKUP, () -> logLookup(collection, query), context));
+    return aggregationPublisher(context.database.getCollection(collection), query);
   }
 
   private static JsonArray query(final JsonObject expression) {
@@ -138,7 +113,6 @@ class Lookup {
     final boolean inner = expr.getBoolean(INNER, false);
     final Context localContext = getDatabase(expr).map(context::withDatabase).orElse(context);
     final Function<JsonObject, JsonArray> queryFunction = queryFunction(expr, context);
-    final State<Boolean> stop = new State<>(false);
     final boolean unwind = expr.getBoolean(UNWIND, false);
 
     return unwind
@@ -148,7 +122,7 @@ class Lookup {
                     m, lookupPublisher(from, queryFunction.apply(m.value), localContext), as))
         : pipe(mapAsyncSequential(
                 (Message<String, JsonObject> m) ->
-                    lookup(from, queryFunction.apply(m.value), stop::get, localContext)
+                    lookup(from, queryFunction.apply(m.value), localContext)
                         .thenApply(builder -> pair(m, builder))))
             .then(
                 map(
